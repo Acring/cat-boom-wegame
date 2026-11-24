@@ -1,0 +1,17 @@
+{
+  "name": "cat-boom-wegame",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cat Boom - 共用六边形棋盘的本地双人猫猫对战微信小游戏",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "esbuild tests/rules.test.ts --bundle --platform=node --format=cjs --outfile=.tmp-test.cjs && node .tmp-test.cjs && rm -f .tmp-test.cjs && esbuild tests/roguelike.test.ts --bundle --platform=node --format=cjs --outfile=.tmp-rl-test.cjs && node .tmp-rl-test.cjs && rm -f .tmp-rl-test.cjs",
+    "build": "esbuild src/main.ts --bundle --format=iife --target=es2018 --outfile=game.js && npm run build:lab",
+    "build:lab": "esbuild src/labApp.ts --bundle --format=iife --target=es2018 --outfile=lab.js",
+    "dev": "esbuild src/main.ts --bundle --format=iife --target=es2018 --outfile=game.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}

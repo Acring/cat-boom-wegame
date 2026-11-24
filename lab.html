@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cat Boom · 合成与特效实验室</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: #1d1a18;
+      color: #f7efe6;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+      overflow: hidden;
+    }
+    .layout {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+    .stage-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: radial-gradient(circle at 50% 45%, #342922 0%, #1d1a18 75%);
+      position: relative;
+      min-width: 0;
+    }
+    #lab-canvas {
+      display: block;
+      border-radius: 18px;
+      box-shadow: 0 20px 56px rgba(0, 0, 0, 0.55);
+      cursor: pointer;
+      max-height: calc(100vh - 76px);
+      max-width: 100%;
+    }
+    .stage-banner {
+      margin-top: 12px;
+      padding: 8px 16px;
+      background: rgba(255, 250, 240, 0.1);
+      border: 1px solid rgba(255, 232, 200, 0.2);
+      border-radius: 999px;
+      font-size: 13px;
+      color: #f5dfc4;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+    .sidebar {
+      width: 370px;
+      background: #27221f;
+      border-left: 1px solid rgba(255, 230, 200, 0.12);
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .title-row h1 {
+      font-size: 17px;
+      font-weight: 800;
+      color: #ffdd9e;
+    }
+    .title-row a {
+      font-size: 12px;
+      color: #9dd9c5;
+      text-decoration: none;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 230, 200, 0.1);
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .card h2 {
+      font-size: 12px;
+      font-weight: 700;
+      color: #c8b6a6;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+    .fixture-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .fixture-group-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #f5c97a;
+      margin-bottom: 4px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    button {
+      appearance: none;
+      border: 1px solid rgba(255, 230, 200, 0.18);
+      background: #362e29;
+      color: #f7efe6;
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    button:hover:not(:disabled) {
+      background: #473c35;
+      border-color: rgba(255, 220, 160, 0.45);
+    }
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    button.active {
+      background: #f5b82e;
+      color: #3a2618;
+      border-color: #ffd875;
+    }
+    button.primary {
+      background: #40b387;
+      color: #0e241b;
+      border-color: #6cd6ad;
+      font-weight: 800;
+    }
+    button.primary:hover:not(:disabled) {
+      background: #52c69a;
+    }
+    button.warn {
+      background: #f06595;
+      color: #2b0b17;
+      border-color: #ff8ab2;
+      font-weight: 800;
+    }
+    .swatch {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    .toggle-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #ece0d1;
+    }
+    .toggle-line input {
+      width: 16px;
+      height: 16px;
+      accent-color: #f5b82e;
+      cursor: pointer;
+    }
+    .log-box {
+      background: #191614;
+      border: 1px solid rgba(255, 230, 200, 0.1);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: #e6d7c7;
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .log-box .phase-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      margin-right: 6px;
+      font-size: 11px;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+      color: #c8b6a6;
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="stage-wrap">
+      <canvas id="lab-canvas" width="760" height="840"></canvas>
+      <div class="stage-banner" id="stage-banner">
+        <span id="phase-status">就绪：悬停预览，点击两只相邻猫交换，或点右侧“执行推荐交换”</span>
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      <div class="title-row">
+        <h1>Cat Boom · 特效实验室</h1>
+        <a href="./index.html">返回主游戏 →</a>
+      </div>
+
+      <div class="card">
+        <h2>1. 预设测试局面</h2>
+        <div class="fixture-groups" id="fixture-buttons"></div>
+        <div class="btn-row">
+          <button id="btn-run-suggested" class="primary" style="flex:1">▶ 执行推荐交换</button>
+          <button id="btn-replay" style="flex:1">↺ 重放刚才局面</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>2. 播放节奏与单步观察</h2>
+        <div class="btn-row" id="speed-buttons">
+          <button data-speed="0.25">0.25×</button>
+          <button data-speed="0.5" class="active">0.5×</button>
+          <button data-speed="1">1×</button>
+          <button data-speed="2">2×</button>
+        </div>
+        <label class="toggle-line">
+          <span>按子阶段自动暂停（匹配→W0→W1→收缩→补猫）</span>
+          <input type="checkbox" id="chk-substep" checked />
+        </label>
+        <label class="toggle-line">
+          <span>显示波次标签与范围高亮</span>
+          <input type="checkbox" id="chk-overlay" checked />
+        </label>
+        <div class="btn-row" id="anim-preview-buttons">
+          <button data-anim="idle" class="active">待机动作</button>
+          <button data-anim="hint">挥爪提示</button>
+          <button data-anim="grabbed">拎起挣扎</button>
+        </div>
+        <button id="btn-next-phase" class="warn" disabled>下一步（Space） ▶</button>
+      </div>
+
+      <div class="card">
+        <h2>3. 模式与自由摆棋画笔</h2>
+        <div class="btn-row">
+          <button id="mode-play" class="active" style="flex:1">交互交换模式</button>
+          <button id="mode-paint" style="flex:1">自由摆棋模式</button>
+        </div>
+        <div id="paint-tools" style="display:none; flex-direction:column; gap:7px;">
+          <div class="btn-row" id="color-buttons">
+            <button data-color="0" class="active"><span class="swatch" style="background:#ffb870"></span>橘</button>
+            <button data-color="1"><span class="swatch" style="background:#a9a6f8"></span>紫</button>
+            <button data-color="2"><span class="swatch" style="background:#8cd9b3"></span>绿</button>
+            <button data-color="3"><span class="swatch" style="background:#f9a9be"></span>粉</button>
+          </div>
+          <div class="btn-row" id="level-buttons">
+            <button data-level="1" class="active">1 级小猫</button>
+            <button data-level="2">2 级大猫</button>
+            <button data-level="3">3 级炫彩 ★</button>
+            <button data-level="0">清空</button>
+          </div>
+          <div class="btn-row">
+            <button id="btn-random-board" style="flex:1">随机新棋盘</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>4. 当前结算拆解</h2>
+        <div class="legend">
+          <span><i class="dot" style="background:#ff9852"></i>W0 宽光束</span>
+          <span><i class="dot" style="background:#ff4d8d"></i>W1 二次引爆</span>
+          <span><i class="dot" style="background:#a855f7"></i>W2+ 多米诺</span>
+          <span><i class="dot" style="background:#38b583"></i>合成中心</span>
+          <span><i class="dot" style="background:#3bb5a5"></i>收缩方向</span>
+        </div>
+        <div class="log-box" id="log-box">等待触发交换...</div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="./lab.js"></script>
+</body>
+</html>
