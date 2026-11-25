@@ -622,7 +622,7 @@ export class CatBoomApp {
 
     this.platform.onPointerMove((sx, sy) => {
       if (this.isInputBlocked()) {
-        this.releaseGrab(false);
+        this.releaseGrab(true);
         return;
       }
       if (this.dragStartCell < 0) return;
@@ -667,8 +667,9 @@ export class CatBoomApp {
 
       if (wasDragging) {
         if (upCell >= 0 && upCell !== startCell && neighbors(startCell).includes(upCell)) {
-          // 保持猫咪从当前拎起的悬空位置直接丝滑落入目标格交换
-          this.releaseGrab(false);
+          const canSwap = validSwap(this.state, startCell, upCell);
+          // 有效交换从当前悬空位置丝滑落入目标格；无效交换直接弹回原位
+          this.releaseGrab(!canSwap);
           void this.submitSwap(startCell, upCell);
         } else {
           this.releaseGrab(true);

@@ -2437,7 +2437,7 @@
       });
       this.platform.onPointerMove((sx, sy) => {
         if (this.isInputBlocked()) {
-          this.releaseGrab(false);
+          this.releaseGrab(true);
           return;
         }
         if (this.dragStartCell < 0) return;
@@ -2479,7 +2479,8 @@
         this.isDragging = false;
         if (wasDragging) {
           if (upCell >= 0 && upCell !== startCell && neighbors(startCell).includes(upCell)) {
-            this.releaseGrab(false);
+            const canSwap = validSwap(this.state, startCell, upCell);
+            this.releaseGrab(!canSwap);
             void this.submitSwap(startCell, upCell);
           } else {
             this.releaseGrab(true);
