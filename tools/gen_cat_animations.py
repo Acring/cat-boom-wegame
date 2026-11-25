@@ -22,13 +22,19 @@ STRIPE = "#d97c36"
 class Coat:
     fur: str
     ear: str
+    ink: str = INK
+    face_ink: str = INK
+    iris: str = ""
 
 
 ORANGE = Coat("#ffbe7b", "#ffd4a3")
-LILAC = Coat("#b6b2e3", "#ffc2c9")
-MINT = Coat("#bfe6c8", "#a7d7b4")
-PINK = Coat("#ffb8c9", "#ffd4de")
-COATS = (ORANGE, LILAC, MINT, PINK)
+BRITISH_BLUE = Coat("#96b2cc", "#f6c4d4")
+BLACK = Coat("#524952", "#8f7a88", "#332524", "#ffe6a3", "#ffcf4d")
+WHITE = Coat("#fffbf2", "#ffb7c5")
+SIAMESE = Coat("#efe0c8", "#8d6b61", face_ink="#fff0d6", iris="#64c8f5")
+COATS = (ORANGE, BRITISH_BLUE, BLACK, WHITE, SIAMESE)
+POINT = "#5c433a"
+SHEEN = "#6f6472"
 
 
 def path(d, fill="none", stroke="none", width=0):
@@ -47,18 +53,17 @@ def group(transform, *shapes):
     return f'<g transform="{transform}">{"".join(shapes)}</g>'
 
 
-def painted(name, contour, coat, markings, width=6):
+def painted(name, contour, coat, markings, width=6, fill=None):
     """Ink last so clipped coat markings meet the inside of the outline."""
     return (f'<defs><clipPath id="{name}">{path(contour)}</clipPath></defs>'
-            + path(contour, coat.fur)
+            + path(contour, fill or coat.fur)
             + f'<g clip-path="url(#{name})">{markings}</g>'
-            + line(contour, width))
+            + line(contour, width, coat.ink))
 
 
 def back_marks(coat, x, y, scale=1):
-    if coat == PINK:
-        art = (oval(0, 0, 5.1, 5, CREAM) + oval(-9, 13, 4.5, 4.8, CREAM)
-               + oval(10, 17, 4.7, 4.5, CREAM))
+    if coat == BLACK:
+        art = path("M-14 -8 C-7 -14 8 -6 16 8 Q19 16 13 13 Q1 -1 -12 -2 Q-17 -3 -14 -8Z", SHEEN)
     elif coat == ORANGE:
         art = path("M-14 -13 Q-15 8 -10 13 Q-4 17 1 -10 Z "
                    "M2 -9 Q-1 16 4 18 Q10 21 17 -3 Z "
@@ -69,8 +74,8 @@ def back_marks(coat, x, y, scale=1):
 
 
 def forehead(coat, x, y, scale=1):
-    if coat == MINT:
-        art = path("M0 -12 Q2 -12 12 -1 Q9 4 1 15 Q-1 15 -12 3 Q-8 -4 0 -12Z", CREAM)
+    if coat == BLACK:
+        art = path("M-15 3 Q-7 -7 9 -5 Q16 -3 11 1 Q-1 1 -11 7 Q-17 9 -15 3Z", SHEEN)
     elif coat == ORANGE:
         art = path("M-16 -12 Q-17 8 -12 9 Q-7 10 -8 -12 Z "
                    "M-5 -14 Q-6 12 0 12 Q5 12 4 -13 Z "
@@ -78,6 +83,23 @@ def forehead(coat, x, y, scale=1):
     else:
         return ""
     return group(f"translate({x} {y}) scale({scale})", art)
+
+
+def body_marks(coat, ears, bib, chest_x, chest_y):
+    ear_fill = path(ears, coat.ear, coat.ear, 2 if coat == WHITE else 0)
+    if coat == SIAMESE:
+        # Expand the inner-ear shapes under the body clip for moving ear tips.
+        return path(ears, POINT, POINT, 17) + ear_fill
+    if coat == ORANGE:
+        return path(bib, CREAM) + ear_fill
+    if coat == BRITISH_BLUE:
+        chest = path("M-17 -6 Q-8 -1 -2 -6 Q3 -10 8 -6 Q12 -4 17 -9 "
+                     "Q16 0 9 4 L10 7 Q4 7 0 12 Q-5 8 -6 5 Q-14 4 -17 -6Z", "#edf4fa")
+    elif coat == WHITE:
+        chest = path("M-21 9 Q-2 17 18 5 Q23 2 20 8 Q13 22 -5 20 Q-17 18 -21 9Z", "#efe5d8")
+    else:
+        return ear_fill
+    return group(f"translate({chest_x} {chest_y})", chest) + ear_fill
 
 
 def crown(x, y, angle=0, scale=1):
@@ -91,18 +113,34 @@ def glint(x, y, radius, color):
     return group(f"translate({x} {y}) scale({radius})", path(shape, color))
 
 
-def face(x, y, spacing, expression, angle=0):
+def face(coat, x, y, spacing, expression, angle=0):
     """Eyes share a baseline. Cheeks, whiskers and mouth move with the muzzle."""
     art = ""
+    if coat == SIAMESE:
+        mask = ("M-34 -2 C-34 -17 -22 -23 -10 -18 Q0 -14 10 -18 "
+                "C24 -24 35 -16 34 -2 Q34 10 21 13 C12 16 10 23 0 23 "
+                "C-10 23 -12 16 -22 13 Q-34 10 -34 -2Z")
+        art = group(f"scale({(spacing+14)/34} 1)", path(mask, POINT))
     for side in (-1, 1):
         eye_x = side * spacing
-        art += oval(eye_x + side * 4, 7.5, 6.2, 3.8, BLUSH)
-        art += line(f"M{eye_x + side*15} 3 l{side*8} -1.8 "
-                    f"M{eye_x + side*16} 9 l{side*6} 1", 3.5)
+        art += oval(eye_x + side * 6, 9, 5.3, 3, BLUSH)
+        whiskers = (f"M{eye_x + side*15} 3 l{side*8} -1.8 "
+                    f"M{eye_x + side*16} 9 l{side*6} 1")
+        art += line(whiskers, 3.5, coat.ink)
+        if coat == BLACK:
+            art += line(whiskers, 2, coat.face_ink)
         if expression in ("smile", "blink") or (expression == "wink" and side == -1):
-            art += line(f"M{eye_x-6} 1 q5.5 -8 12 -1", 4.6)
-        elif expression == "wink":
-            art += line(f"M{eye_x+5} -3 l-9 3.8 9 2.3", 3.8)
+            art += line(f"M{eye_x-6} 1 q5.5 -8 12 -1", 4.6, coat.face_ink)
+        elif coat.iris:
+            held = expression.startswith("held")
+            look = {"held-left": -2.5, "held-right": 2.5}.get(expression, 0)
+            radius = 9 if held else 7.6
+            art += oval(eye_x, -1, radius+1.4, radius+2.4, coat.ink)
+            art += oval(eye_x, -1, radius, radius+1, coat.iris)
+            art += oval(eye_x+look, -1, 3.5, 5.4, "#392927")
+            art += oval(eye_x+look-2, -4.2, 2.3, 2.3, "#fff")
+            if held:
+                art += line(f"M{eye_x-4} -15 q4 -3 8 -2", 2.6, coat.face_ink)
         elif expression in ("sparkle", "wave", "hop"):
             art += oval(eye_x, -1, 6.7, 8.3, INK)
             if expression == "sparkle":
@@ -120,38 +158,43 @@ def face(x, y, spacing, expression, angle=0):
         else:
             art += oval(eye_x, 0, 4.1, 4.4, INK)
     if expression == "held":
-        art += line("M-7 10 Q-5 6 -2 9 Q0 12 2 9 Q4 6 7 10", 2.8)
+        art += line("M-7 10 Q-5 6 -2 9 Q0 12 2 9 Q4 6 7 10", 3.2, coat.face_ink)
     elif expression in ("hop", "held-left", "held-right"):
         shape = ("M-9 6 Q0 10 9 5 Q9 19 1 19 Q-7 19 -9 6Z" if expression == "hop"
                  else "M-6 11 Q-4 3 1 4 Q7 4 7 12 Q8 18 1 17 Q-6 18 -6 11Z")
-        art += path(shape, INK, INK, 2.5)
+        art += path(shape, coat.ink, coat.face_ink, 2.8)
         art += path("M-4 14 Q0 10 5 13 Q5 17 1 17 Q-2 17 -4 14Z", BLUSH)
     else:
-        art += line("M-8 5 Q-5 10 -1 6 L0 3 Q3 9 7 5 L8 3", 3.8)
+        art += line("M-8 5 Q-5 10 -1 6 L0 3 Q3 9 7 5 L8 3", 3.8, coat.face_ink)
+    art += path("M-4 -.8 Q-3 -2 0 -1.5 Q3 -2 4 -.8 Q4 1 0 4 Q-4 1 -4 -.8Z",
+                BLUSH, coat.ink, 1.2)
     return group(f"translate({x} {y}) rotate({angle})", art)
 
 
-def raised_paw(x, y, angle, scale, coat):
+def raised_paw(x, y, angle, scale, coat, extended=False):
     """Draw from the armpit to the toes, leaving the shoulder edge open."""
     shape = ("M-10 21 C-9 13 -14 6 -14 -4 Q-15 -11 -10 -12 "
              "Q-9 -19 -3 -17 Q2 -22 6 -15 Q13 -17 15 -9 "
              "C19 2 11 8 10 17")
+    if extended:
+        shape = ("M-10 42 Q-13 26 -13 8 L-14 -3 Q-15 -12 -9 -12 "
+                 "Q-9 -19 -3 -17 Q2 -22 7 -15 Q14 -16 15 -8 "
+                 "Q18 0 11 11 Q9 27 10 35")
     pads = (oval(0, 1, 6.6, 4.8, BLUSH) + oval(-8, -7, 2.6, 3.4, BLUSH)
             + oval(-1, -10, 2.7, 3.5, BLUSH) + oval(6.5, -8, 2.6, 3.3, BLUSH))
+    tip = path("M-20 -25 H20 V8 Q2 15 -20 7Z", POINT) if coat == SIAMESE else ""
     return group(f"translate({x} {y}) rotate({angle}) scale({scale})",
-                 path(shape, coat.fur, INK, 5), pads)
+                 painted(f"paw{x}", shape, coat, tip, 5), pads)
 
 
 def tail(name, coat, shape, transform, tip_x, tip_y, angle=0):
     marks = ""
-    if coat == LILAC:
-        marks = group(f"translate({tip_x} {tip_y}) rotate({angle})",
-                      path("M-36 -36 H24 V0 Q7 8 -12 2 L-36 6Z", CREAM))
-    elif coat == ORANGE:
+    if coat == ORANGE:
         marks = group(f"translate({tip_x} {tip_y}) rotate({angle})",
                       path("M-35 -1 Q-4 -7 23 1 L23 7 Q-3 1 -35 8Z "
                            "M-34 15 Q-7 9 24 16 L24 23 Q-9 16 -34 24Z", STRIPE))
-    return group(transform, painted(name, shape, coat, marks, 5.2))
+    return group(transform, painted(name, shape, coat, marks, 5.2,
+                                    POINT if coat == SIAMESE else coat.fur))
 
 
 # Each lounging silhouette runs from the near ear, over the far ear and rump,
@@ -219,10 +262,20 @@ def lounge(coat, adult, frame):
         bib = "M69 60 C70 81 56 105 20 122 L23 156 H117 Q134 129 112 114 C97 105 80 93 69 60Z"
         fx, fy, bx, by = 69, 69, 140, 68
 
-    marks = path(bib, CREAM) if coat != MINT else ""
-    marks += path(ears, coat.ear)
-    marks += forehead(coat, fx, fy + (20 if coat == MINT and adult and not bow else 10 if coat == MINT else 0))
+    chest_x, chest_y = (92, 129) if adult and not bow else (gx+12, gy+25)
+    marks = body_marks(coat, ears, bib, chest_x, chest_y)
+    marks += forehead(coat, fx, fy)
     marks += back_marks(coat, bx, by)
+    if coat == SIAMESE:
+        # The tucked feet share the lower contour with the belly.
+        if bow:
+            toes = ((57, 155), (77, 157), (144, 146))
+        elif adult:
+            toes = ((68, 173), (100, 173), (145, 166))
+        else:
+            toes = ((65, 148), (95, 149), (141, 149))
+        for px, py in toes:
+            marks += oval(px, py, 14, 12, POINT)
 
     # The base tail nestles into the haunch. Moving tails emerge from behind it.
     back = ""
@@ -247,26 +300,25 @@ def lounge(coat, adult, frame):
         tip = ("M117 171 Q126 167 123 155 C121 138 143 123 155 135 Q161 141 162 145" if adult else
                "M139 149 C122 152 111 146 114 135 C116 123 129 119 139 124 Q146 130 151 125")
         tail_marks = ""
-        if coat == LILAC:
-            tail_marks = group(f"translate({tx} {ty})",
-                               path("M-23 -25 Q15 -10 4 10 Q0 19 -8 24 H-32Z", CREAM))
         if coat == ORANGE:
             tail_marks = path(f"M{tx} {ty-18} q10 16 4 35 l9 -2 q5 -19 -5 -35Z", STRIPE)
         marks += f'<defs><clipPath id="curl">{path(curl)}</clipPath></defs>'
-        marks += path(curl, coat.fur) + f'<g clip-path="url(#curl)">{tail_marks}</g>'
-        marks += line(tip, 4.8)
+        marks += path(curl, POINT if coat == SIAMESE else coat.fur)
+        marks += f'<g clip-path="url(#curl)">{tail_marks}</g>' + line(tip, 4.8, coat.ink)
 
     paws = ("M78 154 Q81 158 85 164 Q88 156 95 153" if adult else
             "M74 132 Q81 133 81 141 Q82 135 89 131")
     if bow:
         paws = "M48 143 Q55 147 62 144 M74 149 Q81 144 88 145"
-    expr = "smile" if adult else "beans"
+    expr = "beans"
     if bow:
         expr = "sparkle"
     elif frame == 2:
         expr = "wink" if adult else "blink"
-    cat = back + painted("body", shape, coat, marks) + line(paws, 4.5)
-    cat += face(gx, gy, 23 if adult and not bow else 20, expr, ga + (-10 if frame == 3 else 0))
+    elif frame == 1:
+        expr = "smile"
+    cat = back + painted("body", shape, coat, marks) + line(paws, 4.5, coat.ink)
+    cat += face(coat, gx, gy, 23 if adult and not bow else 20, expr, ga + (-10 if frame == 3 else 0))
     cat += front_tail
     if frame == 3:
         cat += raised_paw(57 if adult else 56, 145 if adult else 129, -25, .72, coat)
@@ -308,11 +360,12 @@ def wave(coat, adult, hop):
            "Q134 106 121 99 Q97 84 88 51Z")
     ears = ("M53 67 Q52 55 56 45 Q60 44 71 55Z M116 53 L131 41 Q136 47 135 63Z"
             if adult else "M50 70 Q48 57 51 48 Q56 48 66 57Z M108 53 L121 40 Q126 49 125 60Z")
-    marks = path(ears, coat.ear)
-    if coat != MINT:
-        marks += path(bib, CREAM)
-    marks += forehead(coat, 89, 61 if coat == MINT else 55, .84)
+    marks = body_marks(coat, ears, bib, 92, 132)
+    marks += forehead(coat, 89, 55, .84)
     marks += back_marks(coat, 144, 120, .75)
+    if coat == SIAMESE and not hop:
+        marks += oval(61, 164, 14, 13, POINT) + oval(135, 164, 14, 12, POINT)
+        marks += oval(73, 141, 9, 7, POINT)
     shape = ("M122 153 C149 154 159 140 157 125 C151 111 153 102 160 101 "
              "C169 98 175 110 173 125 Q173 157 148 163 Q133 166 122 153Z")
     art = tail("tail", coat, shape, "rotate(-6 146 135)", 161, 110, -18)
@@ -320,11 +373,12 @@ def wave(coat, adult, hop):
         heel = "M-12 -9 Q-12 3 -8 12 Q-4 19 4 17 Q11 17 12 10 L12 -8Z"
         for x, y, tilt in ((69, 144, 22), (124, 143, -29)):
             art += group(f"translate({x} {y}) rotate({tilt})",
-                         path(heel, coat.fur, INK, 5), line("M0 11 l1 4", 2.4))
+                         path(heel, POINT if coat == SIAMESE else coat.fur, coat.ink, 5),
+                         line("M0 11 l1 4", 2.4, coat.ink))
     art += painted("body", body, coat, marks)
     if not hop:
-        art += line("M52 158 Q52 151 56 149 M126 161 Q131 158 133 152", 4)
-    art += face(89 if adult else 84, 86, 20 if adult else 18,
+        art += line("M52 158 Q52 151 56 149 M126 161 Q131 158 133 152", 4, coat.ink)
+    art += face(coat, 89 if adult else 84, 86, 20 if adult else 18,
                 "hop" if hop else "wave", 2 if hop else -7)
     if hop:
         art += raised_paw(38, 90, -30, 1.07, coat)
@@ -332,14 +386,8 @@ def wave(coat, adult, hop):
         art += glint(26, 60, 8.7, "#ffe066") + glint(157, 46, 10, "#ffe066")
         art += line("M50 173 q-5 0 -8 -4 M141 170 q5 -1 8 -6", 3)
     else:
-        # Extended forearm: draw the pad over its wrist, with an open shoulder.
-        art += group("translate(143 57) rotate(27)",
-                     path("M-10 42 Q-13 26 -13 8 L-14 -3 Q-15 -12 -9 -12 "
-                          "Q-9 -19 -3 -17 Q2 -22 7 -15 Q14 -16 15 -8 "
-                          "Q18 0 11 11 Q9 27 10 35", coat.fur, INK, 5),
-                     oval(0, 1, 6.6, 5, BLUSH), oval(-8, -7, 2.6, 3.4, BLUSH),
-                     oval(-1, -10, 2.7, 3.4, BLUSH), oval(6.5, -8, 2.6, 3.3, BLUSH))
-        art += line("M70 124 Q62 136 65 142 Q69 149 77 145 Q81 143 83 138", 4.3)
+        art += raised_paw(143, 57, 27, 1, coat, extended=True)
+        art += line("M70 124 Q62 136 65 142 Q69 149 77 145 Q81 143 83 138", 4.3, coat.ink)
         art += glint(164, 29, 10.5, "#ffe066")
     if adult:
         art += crown(94, 42, 5 if hop else -6, .88)
@@ -367,8 +415,15 @@ def dangling_leg(coat, x, y, side, kick, fore):
         detail += oval(18 if fore else 30, -19 if fore else -13, 1.7, 1.8, BLUSH)
     else:
         detail = line("M7 22 l.6 3" if fore else "M2 27 l1 4", 2.2)
+    tip = ""
+    if coat == SIAMESE:
+        if kick:
+            start = 13 if fore else 22
+            tip = path(f"M{start} -32 H45 V16 H{start} q7 -14 0 -28Z", POINT)
+        else:
+            tip = path("M-18 12 Q0 20 21 11 V38 H-18Z", POINT)
     return group(f"translate({x} {y}) scale({side} 1)",
-                 path(d, coat.fur, INK, 5.1), detail)
+                 painted(f"leg{y}_{side}", d, coat, tip, 5.1), detail)
 
 
 def sweat(x, y, angle, scale=1):
@@ -417,13 +472,12 @@ def grabbed(coat, adult, frame):
     inner_ears = ("M44 53 Q54 52 64 55 L52 58Z M130 54 L144 52 Q141 57 135 59Z"
                   if swing == 1 else
                   "M55 43 L65 50 L57 55Z M128 49 L136 42 L135 55Z")
-    marks = path(inner_ears, coat.ear)
-    if coat != MINT:
-        marks += path(f"M96 43 Q89 71 53 81 Q53 93 69 101 "
-                      f"Q{left+10} 119 {left+7} 141 Q{left+7} 157 {hip-2} 157 "
-                      f"Q{hip+12} 150 {hip+5} 130 Q{hip-1} 117 112 103 "
-                      "Q117 97 128 88 Q105 70 96 43Z", CREAM)
-    marks += forehead(coat, 96, 56 if coat == MINT else 47, .78)
+    bib = (f"M96 43 Q89 71 53 81 Q53 93 69 101 "
+           f"Q{left+10} 119 {left+7} 141 Q{left+7} 157 {hip-2} 157 "
+           f"Q{hip+12} 150 {hip+5} 130 Q{hip-1} 117 112 103 "
+           "Q117 97 128 88 Q105 70 96 43Z")
+    marks = body_marks(coat, inner_ears, bib, 96+5*swing, 120)
+    marks += forehead(coat, 96, 47, .78)
     if coat == ORANGE:
         marks += group(f"translate({right-2} 140) rotate(-80)", back_marks(coat, 0, 0, .6))
     else:
@@ -434,7 +488,7 @@ def grabbed(coat, adult, frame):
         shoulder = 96 + side*(28 if adult else 24) + swing*4
         art += dangling_leg(coat, shoulder, 104, side, lifted, True)
     expr = {0: "held", -1: "held-left", 1: "held-right"}[swing]
-    art += face(95, 76, 19, expr, 4*swing)
+    art += face(coat, 95, 76, 19, expr, 4*swing)
     if adult:
         art += crown(108+5*swing, 31 if swing == 0 else 28, 14+13*swing, .8)
     if swing == 0:
@@ -467,6 +521,7 @@ def render_frame(coat, adult, frame):
 
 
 def main():
+    output = ROOT / "assets" / "cats"
     for color, coat in enumerate(COATS):
         for level in (1, 2):
             sheet = Image.new("RGBA", (CELL*10, CELL))
@@ -477,8 +532,9 @@ def main():
                                       and 2 <= bounds[1] and bounds[3] <= CELL-2):
                     raise ValueError(f"color {color}, level {level}, frame {frame}: {bounds}")
                 sheet.paste(tile, (frame*CELL, 0))
-            output = ROOT / "assets" / "cats" / f"anim_cat_{color}_lv{level}.png"
-            sheet.save(output, optimize=True)
+            name = f"cat_{color}_lv{level}.png"
+            sheet.save(output / f"anim_{name}", optimize=True)
+            sheet.crop((0, 0, CELL, CELL)).save(output / name, optimize=True)
 
 
 if __name__ == "__main__":

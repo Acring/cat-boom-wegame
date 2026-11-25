@@ -896,7 +896,7 @@ class CatBoomLab {
             : cat?.level === 2
               ? '#e8a923'
               : cat
-                ? CAT_PALETTE[cat.color % 4]
+                ? CAT_PALETTE[cat.color % CAT_PALETTE.length]
                 : '#d8c2a8';
       ctx.lineWidth = i === this.selected ? 5 : 3;
       ctx.stroke();

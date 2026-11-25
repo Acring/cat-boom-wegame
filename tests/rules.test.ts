@@ -3,6 +3,7 @@ import {
   castWideBeam,
   CELL_COUNT,
   cloneState,
+  COLORS,
   coord,
   findLegalSwaps,
   index,
@@ -34,6 +35,13 @@ function runTests() {
   check(matches(g1.board).length === 0, 'Initial board must have no automatic matches');
   check(findLegalSwaps(g1).length > 0, 'Initial board must have at least one legal swap');
   check(g1.board.every((c) => c !== null && c.level === 1), 'Initial board must be all level-1 cats');
+  check(COLORS === 5, 'Board should use 5 distinct real cat colors');
+  check(
+    g1.board.every((c) => c !== null && c.color >= 0 && c.color < COLORS),
+    'All cats on initial board must stay within valid 0..4 color range'
+  );
+  const initialColors = new Set(g1.board.map((c) => c!.color));
+  check(initialColors.size === COLORS, 'Initial 7x7 board should populate all 5 cat colors');
 
   // 3. 7 种确定性测试局面校验
   for (let id = 0; id < FIXTURE_NAMES.length; id++) {

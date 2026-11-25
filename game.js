@@ -2,17 +2,23 @@
 (() => {
   // src/platform.ts
   function createPlatform() {
+    var _a;
     const isWechat = typeof wx !== "undefined" && typeof wx.createCanvas === "function";
     let canvas;
     let width;
     let height;
     let dpr;
     let topInset = 0;
+    let bottomInset = 0;
+    let isTouch = true;
     if (isWechat && wx) {
       canvas = wx.createCanvas();
       const info = typeof wx.getWindowInfo === "function" ? wx.getWindowInfo() : wx.getSystemInfoSync();
       width = info.windowWidth;
       height = info.windowHeight;
+      if (info.safeArea) {
+        bottomInset = Math.max(0, Math.min(width > 0 ? height - info.safeArea.bottom : 0, 48));
+      }
       dpr = Math.min(info.pixelRatio || 1, 2);
       if (typeof wx.getMenuButtonBoundingClientRect === "function") {
         try {
@@ -25,6 +31,7 @@
         topInset = (info.statusBarHeight || 20) + 40;
       }
     } else {
+      isTouch = typeof navigator !== "undefined" && navigator.maxTouchPoints > 0 || typeof window !== "undefined" && "ontouchstart" in window;
       const existing = document.getElementById("game-canvas");
       canvas = existing || document.createElement("canvas");
       if (!existing) {
@@ -36,6 +43,17 @@
       } else {
         width = window.innerWidth;
         height = window.innerHeight;
+        const probe = document.createElement("div");
+        try {
+          probe.style.cssText = "position:absolute;visibility:hidden;padding-bottom:env(safe-area-inset-bottom)";
+          document.body.appendChild(probe);
+          const inset = parseFloat(window.getComputedStyle(probe).paddingBottom) || 0;
+          bottomInset = Math.max(0, Math.min(inset, 48));
+        } catch (e) {
+          bottomInset = 0;
+        } finally {
+          (_a = probe.parentNode) == null ? void 0 : _a.removeChild(probe);
+        }
       }
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.style.width = `${width}px`;
@@ -87,9 +105,9 @@
         };
       };
       canvas.addEventListener("pointerdown", (e) => {
-        var _a;
+        var _a2;
         pointerActive = true;
-        (_a = canvas.setPointerCapture) == null ? void 0 : _a.call(canvas, e.pointerId);
+        (_a2 = canvas.setPointerCapture) == null ? void 0 : _a2.call(canvas, e.pointerId);
         const pos = toLocal(e.clientX, e.clientY);
         for (const cb of downListeners) cb(pos.x, pos.y);
       });
@@ -117,6 +135,8 @@
       height,
       dpr,
       topInset,
+      bottomInset,
+      isTouch,
       isWechat,
       onPointerDown(cb) {
         downListeners.push(cb);
@@ -153,10 +173,24 @@
   }
   function loadGameAssets() {
     return {
+      icons: {
+        sound_on: loadImage("assets/ui/icon_sound_on.png"),
+        sound_off: loadImage("assets/ui/icon_sound_off.png"),
+        shield: loadImage("assets/ui/icon_shield.png"),
+        blast: loadImage("assets/ui/icon_blast.png"),
+        sparkle: loadImage("assets/ui/icon_sparkle.png"),
+        gift: loadImage("assets/ui/icon_gift.png"),
+        trophy: loadImage("assets/ui/icon_trophy.png"),
+        paw: loadImage("assets/ui/icon_paw.png"),
+        rice: loadImage("assets/ui/icon_rice.png"),
+        target: loadImage("assets/ui/icon_target.png"),
+        bolt: loadImage("assets/ui/icon_bolt.png"),
+        crown: loadImage("assets/ui/icon_crown.png")
+      },
       bg: loadImage("assets/bg_catroom.jpg"),
       avatarP1: loadImage("assets/ui/avatar_p1.png"),
       avatarP2: loadImage("assets/ui/avatar_p2.png"),
-      cats: [0, 1, 2, 3].map((color) => ({
+      cats: [0, 1, 2, 3, 4].map((color) => ({
         lv1: loadImage(`assets/cats/cat_${color}_lv1.png`),
         lv2: loadImage(`assets/cats/cat_${color}_lv2.png`),
         animLv1: loadImage(`assets/cats/anim_cat_${color}_lv1.png`),
@@ -175,13 +209,146 @@
     };
   }
 
+  // src/audio.ts
+  var SoundEngine = class {
+    constructor() {
+      this.ctx = null;
+      this.muted = false;
+    }
+    isMuted() {
+      return this.muted;
+    }
+    toggleMute() {
+      this.muted = !this.muted;
+      return this.muted;
+    }
+    /** 在用户首次交互时惰性初始化并恢复音频上下文 */
+    unlock() {
+      if (this.muted) return;
+      const ctx = this.ensureContext();
+      if (!ctx) return;
+      try {
+        if (ctx.state === "suspended" && typeof ctx.resume === "function") {
+          void ctx.resume();
+        }
+      } catch (e) {
+      }
+    }
+    ensureContext() {
+      if (this.ctx) return this.ctx;
+      try {
+        if (typeof wx !== "undefined" && typeof wx.createWebAudioContext === "function") {
+          this.ctx = wx.createWebAudioContext();
+          return this.ctx;
+        }
+        if (typeof window !== "undefined") {
+          const w = window;
+          const Ctor = w.AudioContext || w.webkitAudioContext;
+          if (Ctor) {
+            this.ctx = new Ctor();
+            return this.ctx;
+          }
+        }
+      } catch (e) {
+        this.ctx = null;
+      }
+      return null;
+    }
+    tone(type, freqStart, freqEnd, duration, volume, delay = 0) {
+      if (this.muted) return;
+      const ctx = this.ensureContext();
+      if (!ctx) return;
+      try {
+        if (ctx.state === "suspended" && typeof ctx.resume === "function") {
+          void ctx.resume();
+        }
+        const now = ctx.currentTime + delay;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(Math.max(40, freqStart), now);
+        if (freqEnd !== freqStart) {
+          osc.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd), now + duration);
+        }
+        gain.gain.setValueAtTime(1e-4, now);
+        gain.gain.linearRampToValueAtTime(volume, now + Math.min(0.015, duration * 0.25));
+        gain.gain.exponentialRampToValueAtTime(1e-4, now + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+      } catch (e) {
+      }
+    }
+    /** 拎起小猫：软萌轻弹啵声 */
+    playGrab() {
+      this.tone("sine", 340, 560, 0.085, 0.11);
+    }
+    /** 确认交换落位：轻快碰击 */
+    playSwap() {
+      this.tone("triangle", 280, 420, 0.09, 0.1);
+    }
+    /** 非法交换反馈：低沉短促嘟声 */
+    playInvalid() {
+      this.tone("sine", 210, 150, 0.12, 0.09);
+    }
+    /** 合成大猫/炫彩猫：清亮上行铃音 */
+    playMerge(level = 2) {
+      if (level === 3) {
+        this.tone("triangle", 523.25, 587.33, 0.12, 0.13, 0);
+        this.tone("triangle", 659.25, 783.99, 0.14, 0.14, 0.07);
+        this.tone("sine", 1046.5, 1174.66, 0.22, 0.14, 0.14);
+      } else {
+        this.tone("triangle", 493.88, 659.25, 0.11, 0.12, 0);
+        this.tone("sine", 783.99, 880, 0.15, 0.11, 0.06);
+      }
+    }
+    /** 逐波引爆：低频冲击 + 随波次爬升的爽感爆音 */
+    playBlast(waveIndex) {
+      const pitchBoost = Math.pow(1.16, Math.min(waveIndex, 5));
+      this.tone("sawtooth", 165 * pitchBoost, 52, 0.22, 0.16, 0);
+      this.tone("triangle", 440 * pitchBoost, 680 * pitchBoost, 0.14, 0.12, 0.02);
+      if (waveIndex > 0) {
+        this.tone("sine", 740 * pitchBoost, 987.77 * pitchBoost, 0.18, 0.11, 0.06);
+      }
+    }
+    /** 第 2 轮及以上连锁提示音 */
+    playCombo(roundNumber) {
+      const base = 523.25 * Math.pow(1.12, Math.min(roundNumber - 2, 5));
+      this.tone("sine", base, base * 1.25, 0.12, 0.12, 0);
+      this.tone("triangle", base * 1.25, base * 1.5, 0.16, 0.11, 0.06);
+    }
+    /** 拆穿 Boss 意图 / 选卡确认 */
+    playChime() {
+      this.tone("triangle", 587.33, 783.99, 0.1, 0.11, 0);
+      this.tone("sine", 880, 1046.5, 0.16, 0.11, 0.07);
+    }
+    /** 击败 Boss / 通关短旋律 */
+    playVictory() {
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((f, idx) => {
+        this.tone("triangle", f, f, 0.16, 0.13, idx * 0.085);
+      });
+    }
+    /** 战败短旋律 */
+    playDefeat() {
+      const notes = [392, 349.23, 311.13, 261.63];
+      notes.forEach((f, idx) => {
+        this.tone("sine", f, f * 0.96, 0.18, 0.11, idx * 0.1);
+      });
+    }
+  };
+
   // src/catRender.ts
-  var CAT_PALETTE = ["#ffb870", "#a9a6f8", "#8cd9b3", "#f9a9be"];
+  var CAT_PALETTE = ["#ffb870", "#96b2cc", "#524952", "#fffaf0", "#efe0c8"];
   var ANIM_FRAME_SIZE = 192;
   var ANIM_FRAME_COUNT = 10;
   var INK = "#4e342e";
   var FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif';
   function pickCatAnimFrame(animState, elapsed, seedOffset = 0, grabElapsed = 0) {
+    if (animState === "static") {
+      return 0;
+    }
     if (animState === "grabbed") {
       if (grabElapsed < 0.14) return 7;
       const step = Math.floor((grabElapsed - 0.14) / 0.105);
@@ -236,13 +403,14 @@
       alpha = 1,
       elapsed = 0,
       showBadge = true,
-      animState = "idle",
+      animState = "static",
       seedOffset = 0,
       grabElapsed = 0,
       flipX = false,
       forceFrame
     } = opts;
-    const idx = (colorId % 4 + 4) % 4;
+    const n = CAT_PALETTE.length;
+    const idx = (colorId % n + n) % n;
     const isGrabbed = animState === "grabbed";
     ctx.save();
     ctx.translate(x, y);
@@ -442,7 +610,7 @@
   // src/rules.ts
   var SIZE = 7;
   var CELL_COUNT = SIZE * SIZE;
-  var COLORS = 4;
+  var COLORS = 5;
   var HP = 100;
   var AXES = [
     [0, 1],
@@ -621,7 +789,7 @@
     for (let attempt = 0; attempt < 500; attempt++) {
       state.board = new Array(CELL_COUNT).fill(null);
       for (let i = 0; i < CELL_COUNT; i++) {
-        const colors = [0, 1, 2, 3];
+        const colors = Array.from({ length: COLORS }, (_, k) => k);
         while (colors.length > 0) {
           const pick = rng.randiRange(0, colors.length - 1);
           state.board[i] = { id: 0, color: colors[pick], level: 1 };
@@ -1512,6 +1680,15 @@
       detailDesc: "\u672C\u56DE\u5408\u53EA\u8981\u5408\u6210\u51FA\u5927\u732B\u6216\u70AB\u5F69\u732B\uFF0C\u4E0B\u4E2A Boss \u56DE\u5408\u4F60\u53D7\u5230\u7684\u4F24\u5BB3\u51CF\u514D 30%\u3002",
       badgeColor: "#eab308"
     },
+    {
+      id: "whisker_radar",
+      branch: "merge",
+      branchLabel: "\u5408\u6210\u6D41",
+      name: "\u732B\u987B\u96F7\u8FBE",
+      shortDesc: "\u53EF\u5408\u6210/\u5F15\u7206\u732B\u54AA\u6325\u722A\u63D0\u793A",
+      detailDesc: "\u611F\u77E5\u68CB\u76D8\u52A8\u6001\uFF1A\u53EF\u5F15\u7206\u5927\u732B\u6216\u53EF\u5408\u6210\u7684\u732B\u54AA\u4F1A\u671D\u642D\u6863\u6325\u722A\u62DB\u624B\u63D0\u793A\u4EA4\u6362\u3002",
+      badgeColor: "#f59e0b"
+    },
     // 🌀 收缩流
     {
       id: "gravity_vortex",
@@ -1560,8 +1737,8 @@
       bossTurnsTaken: 0,
       relics: [],
       calmDefuseActive: false,
-      phase: "battle",
-      rewardChoices: [],
+      phase: "opening_reward",
+      rewardChoices: rollRelicChoices([], seed + 313),
       totalTurns: 0,
       bestTurnDamage: 0,
       defeatedBosses: []
@@ -1576,6 +1753,9 @@
     st.shield = [run.playerShield, run.bossShield];
     st.player = 0;
     return st;
+  }
+  function hasHintRelic(relics) {
+    return relics.includes("whisker_radar");
   }
   function buildPlayerModifiers(relics) {
     const has = (id) => relics.includes(id);
@@ -1605,7 +1785,7 @@
     probe.winner = -1;
     const swaps = findLegalSwaps(probe);
     const skillReady = isBossSkillDue(boss, bossTurnsTaken);
-    const skillText = boss.id === "orange" ? "\u88AB\u52A8\uFF1A\u6D88\u6A58\u732B\u56DE\u8840" : boss.id === "cow" ? skillReady ? "\u26A1 \u672C\u56DE\u5408\u8DD1\u9177\uFF1A\u53D8 1 \u53EA\u5927\u732B" : "\u8DD1\u9177\u5145\u80FD\u4E2D\uFF08\u4E0B\u56DE\u5408\u53D1\u766B\uFF09" : skillReady ? "\u{1F451} \u672C\u56DE\u5408\u54C8\u6C14\uFF1A+8 \u76FE + \u9020 1 \u5927\u732B" : "\u732B\u738B\u84C4\u529B\u4E2D\uFF08\u4E0B\u56DE\u5408\u54C8\u6C14\uFF09";
+    const skillText = boss.id === "orange" ? "\u88AB\u52A8\uFF1A\u6D88\u6A58\u732B\u56DE\u8840" : boss.id === "cow" ? skillReady ? "\u672C\u56DE\u5408\u8DD1\u9177\uFF1A\u53D8 1 \u53EA\u5927\u732B" : "\u8DD1\u9177\u5145\u80FD\u4E2D\uFF08\u4E0B\u56DE\u5408\u53D1\u766B\uFF09" : skillReady ? "\u672C\u56DE\u5408\u54C8\u6C14\uFF1A+8 \u76FE + \u9020 1 \u5927\u732B" : "\u732B\u738B\u84C4\u529B\u4E2D\uFF08\u4E0B\u56DE\u5408\u54C8\u6C14\uFF09";
     if (swaps.length === 0) {
       return {
         swap: null,
@@ -1724,7 +1904,7 @@
         cat.level = 1;
       }
     }
-    const banner = boss.id === "cow" ? upgradedCell >= 0 ? "\u26A1 \u5976\u725B\u732B\u5348\u591C\u8DD1\u9177\uFF01\u628A 1 \u53EA\u5C0F\u732B\u5413\u6210\u4E86 2 \u7EA7\u5927\u732B\uFF01" : "\u26A1 \u5976\u725B\u732B\u5348\u591C\u8DD1\u9177\u6251\u4E86\u4E2A\u7A7A\uFF01" : upgradedCell >= 0 ? `\u{1F451} \u54C8\u57FA\u7C73\u732B\u738B\u54C8\u6C14\uFF01\u83B7\u5F97 +${shieldGained} \u62A4\u76FE\u5E76\u50AC\u751F 1 \u53EA\u5927\u732B\uFF01` : `\u{1F451} \u54C8\u57FA\u7C73\u732B\u738B\u54C8\u6C14\uFF01\u83B7\u5F97 +${shieldGained} \u62A4\u76FE\uFF01`;
+    const banner = boss.id === "cow" ? upgradedCell >= 0 ? "\u5976\u725B\u732B\u5348\u591C\u8DD1\u9177\uFF01\u628A 1 \u53EA\u5C0F\u732B\u5413\u6210\u4E86 2 \u7EA7\u5927\u732B\uFF01" : "\u5976\u725B\u732B\u5348\u591C\u8DD1\u9177\u6251\u4E86\u4E2A\u7A7A\uFF01" : upgradedCell >= 0 ? `\u54C8\u57FA\u7C73\u732B\u738B\u54C8\u6C14\uFF01\u83B7\u5F97 +${shieldGained} \u62A4\u76FE\u5E76\u50AC\u751F 1 \u53EA\u5927\u732B\uFF01` : `\u54C8\u57FA\u7C73\u732B\u738B\u54C8\u6C14\uFF01\u83B7\u5F97 +${shieldGained} \u62A4\u76FE\uFF01`;
     return {
       triggered: true,
       banner,
@@ -1865,9 +2045,10 @@
   var FONT_FAMILY2 = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif';
   var INK2 = "#4e342e";
   var INK_SOFT = "#7a584c";
-  var NEST_RIM_COLORS = ["#ffd8ad", "#ddd3fc", "#ccecd4", "#ffd0de"];
+  var NEST_RIM_COLORS = ["#ffd8ad", "#cde2f5", "#f6e2a1", "#ffd3df", "#cdebd7"];
   var NEST_EMPTY_RIM = "#f4e2c8";
   var NEST_BIG_RIM = "#ffea9c";
+  var WAVE_COLORS = ["#ff9852", "#ff4d8d", "#a855f7", "#ec4899"];
   function easeCubicInOut(t) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
@@ -1948,6 +2129,7 @@
   }
   var CatBoomApp = class {
     constructor(platform2) {
+      this.sound = new SoundEngine();
       this.scale = 1;
       this.offsetX = 0;
       this.offsetY = 0;
@@ -1957,7 +2139,10 @@
       this.previewTarget = -1;
       this.preview = { valid: false };
       this.currentEvent = null;
+      this.activeEventPhase = "none";
+      this.activeWaveIndex = -1;
       this.statusText = "";
+      this.statusIcon = null;
       // 触控拖动与按住拎起猫咪状态
       this.dragStartCell = -1;
       this.isDragging = false;
@@ -1975,7 +2160,6 @@
       this.bossIntent = null;
       this.bossHighlightSwap = null;
       this.hintSet = { highValue: [], fallback: null };
-      this.idleSeconds = 0;
       // 控制选项
       this.busy = false;
       this.speed = 1;
@@ -1987,12 +2171,18 @@
       this.showRelicsModal = false;
       // 渲染实体与动画
       this.visuals = /* @__PURE__ */ new Map();
+      this.ambientAnims = [];
+      this.ambientSpawnTimer = 1.4;
+      this.lastAmbientCatId = -1;
       this.ghosts = [];
+      this.shockwaves = [];
       this.floatings = [];
+      this.comboTracker = null;
       this.tweens = [];
       this.shakeOffsetX = 0;
       this.shakeOffsetY = 0;
       this.bannerText = "";
+      this.bannerIcon = null;
       this.bannerLife = 0;
       this.bannerMaxLife = 1.6;
       this.elapsed = 0;
@@ -2019,7 +2209,7 @@
     }
     computeViewport() {
       const availW = this.platform.width;
-      const availH = Math.max(240, this.platform.height - this.platform.topInset);
+      const availH = Math.max(240, this.platform.height - this.platform.topInset - this.platform.bottomInset);
       this.scale = Math.min(availW / VIRTUAL_W, availH / VIRTUAL_H);
       this.offsetX = (availW - VIRTUAL_W * this.scale) / 2;
       this.offsetY = this.platform.topInset + (availH - VIRTUAL_H * this.scale) / 2;
@@ -2037,6 +2227,9 @@
         y: ORIGIN_Y + p.y * HEX_STEP
       };
     }
+    getGrabLiftY() {
+      return this.platform.isTouch ? 48 : 28;
+    }
     hitCell(vx, vy) {
       let best = -1;
       let bestDist = 55;
@@ -2050,7 +2243,12 @@
       }
       return best;
     }
-    showBanner(text, duration = 1.6) {
+    setStatus(text, icon = null) {
+      this.statusText = text;
+      this.statusIcon = icon;
+    }
+    showBanner(text, duration = 1.6, icon = null) {
+      this.bannerIcon = icon;
       this.bannerText = text;
       this.bannerMaxLife = duration;
       this.bannerLife = duration;
@@ -2072,8 +2270,12 @@
       this.gameMode = "roguelike";
       this.showDebugPanel = false;
       this.showRelicsModal = false;
+      this.comboTracker = null;
       this.run = createRoguelikeRun(seed);
-      this.startCurrentStage();
+      const openingState = createStageGameState(this.run);
+      this.loadState(openingState);
+      this.bossIntent = null;
+      this.setStatus("\u732B\u795E\u8D77\u624B\u793C\uFF1A\u5148\u9009 1 \u4E2A\u521D\u59CB\u6D41\u6D3E\u795D\u798F\u5F00\u542F\u95EF\u5173\uFF01", "gift");
     }
     startCurrentStage() {
       this.run.bossShield = 0;
@@ -2081,6 +2283,7 @@
       this.run.calmDefuseActive = false;
       this.run.phase = "battle";
       this.bossHighlightSwap = null;
+      this.comboTracker = null;
       const stageState = createStageGameState(this.run);
       this.loadState(stageState);
       const boss = getBossProfile(this.run.stageIndex);
@@ -2088,20 +2291,26 @@
       this.refreshPlayerTurnGuides();
     }
     chooseRewardRelic(id) {
-      if (this.gameMode !== "roguelike" || this.run.phase !== "reward") return;
+      if (this.gameMode !== "roguelike" || this.run.phase !== "opening_reward" && this.run.phase !== "reward") {
+        return;
+      }
+      const isOpening = this.run.phase === "opening_reward";
       this.run.relics.push(id);
       this.run.rewardChoices = [];
-      this.run.stageIndex += 1;
+      if (!isOpening) {
+        this.run.stageIndex += 1;
+      }
+      this.sound.playChime();
       this.startCurrentStage();
     }
     refreshPlayerTurnGuides() {
-      this.idleSeconds = 0;
-      this.hintSet = computeHintSwaps(this.state, this.getCurrentModifiers(0));
+      const canShowHints = this.gameMode === "roguelike" && hasHintRelic(this.run.relics);
+      this.hintSet = canShowHints ? computeHintSwaps(this.state, this.getCurrentModifiers(0)) : { highValue: [], fallback: null };
       if (this.gameMode === "roguelike" && this.run.phase === "battle" && this.state.winner < 0) {
         const boss = getBossProfile(this.run.stageIndex);
         const mult = this.run.calmDefuseActive ? 0.7 : 1;
         this.bossIntent = computeBossIntent(this.state, boss, this.run.bossTurnsTaken, mult);
-        this.statusText = `${boss.name}\u610F\u56FE\uFF1A${this.bossIntent.headline}`;
+        this.setStatus(`${boss.name}\u610F\u56FE\uFF1A${this.bossIntent.headline}`);
       } else {
         this.bossIntent = null;
       }
@@ -2126,9 +2335,17 @@
       this.previewTarget = -1;
       this.preview = { valid: false };
       this.currentEvent = null;
+      this.activeEventPhase = "none";
+      this.activeWaveIndex = -1;
+      this.shockwaves = [];
+      this.comboTracker = null;
       this.legalCount = findLegalSwaps(this.state).length;
+      this.ambientAnims = [];
+      this.ambientSpawnTimer = 1.4;
       this.syncVisuals(this.state.board);
-      this.statusText = this.state.fixture !== void 0 ? `\u5B9E\u9A8C\uFF1A${FIXTURE_NAMES[this.state.fixture]} \xB7 \u6309\u91D1\u8272\u7BAD\u5934\u4EA4\u6362` : "\u70B9\u51FB\u6216\u62D6\u52A8\u76F8\u90BB\u732B\u732B\u4EA4\u6362\u4F4D\u7F6E";
+      this.setStatus(
+        this.state.fixture !== void 0 ? `\u5B9E\u9A8C\uFF1A${FIXTURE_NAMES[this.state.fixture]} \xB7 \u6309\u91D1\u8272\u7BAD\u5934\u4EA4\u6362` : "\u70B9\u51FB\u6216\u62D6\u52A8\u76F8\u90BB\u732B\u732B\u4EA4\u6362\u4F4D\u7F6E"
+      );
     }
     restartSame() {
       if (this.busy) return;
@@ -2143,9 +2360,15 @@
       this.previewTarget = -1;
       this.preview = { valid: false };
       this.currentEvent = null;
+      this.activeEventPhase = "none";
+      this.activeWaveIndex = -1;
+      this.shockwaves = [];
+      this.comboTracker = null;
       this.legalCount = findLegalSwaps(this.state).length;
+      this.ambientAnims = [];
+      this.ambientSpawnTimer = 1.4;
       this.syncVisuals(this.state.board);
-      this.statusText = `\u5DF2\u6062\u590D\u7B2C ${this.state.turn} \u56DE\u5408\u5F00\u59CB\u72B6\u6001`;
+      this.setStatus(`\u5DF2\u6062\u590D\u7B2C ${this.state.turn} \u56DE\u5408\u5F00\u59CB\u72B6\u6001`);
       this.showDebugPanel = false;
     }
     syncVisuals(board) {
@@ -2167,6 +2390,7 @@
     }
     bindInputs() {
       this.platform.onPointerDown((sx, sy) => {
+        this.sound.unlock();
         const { x, y } = this.toVirtual(sx, sy);
         for (let i = this.buttons.length - 1; i >= 0; i--) {
           const b = this.buttons[i];
@@ -2193,7 +2417,6 @@
           return;
         }
         if (this.isInputBlocked()) return;
-        this.idleSeconds = 0;
         const cell = this.hitCell(x, y);
         this.dragStartCell = cell;
         this.isDragging = false;
@@ -2203,11 +2426,12 @@
           this.grabbedCell = cell;
           this.grabbedCatId = cat.id;
           this.grabPointerX = p.x;
-          this.grabPointerY = p.y - 20;
+          this.grabPointerY = p.y - this.getGrabLiftY();
           this.grabSmoothX = p.x;
-          this.grabSmoothY = p.y - 6;
+          this.grabSmoothY = p.y - Math.round(this.getGrabLiftY() * 0.35);
           this.grabTilt = 0;
           this.grabElapsed = 0;
+          this.sound.playGrab();
           this.platform.vibrate("light");
         }
       });
@@ -2220,11 +2444,10 @@
         const { x, y } = this.toVirtual(sx, sy);
         if (this.grabbedCell >= 0) {
           this.grabPointerX = x;
-          this.grabPointerY = y - 18;
+          this.grabPointerY = y - this.getGrabLiftY();
         }
         const cell = this.hitCell(x, y);
         if (cell >= 0 && cell !== this.dragStartCell) {
-          this.idleSeconds = 0;
           this.isDragging = true;
           this.selected = this.dragStartCell;
           if (neighbors(this.selected).includes(cell)) {
@@ -2287,14 +2510,14 @@
           return;
         }
         if (!validSwap(this.state, this.selected, upCell)) {
-          this.statusText = "\u8FD9\u6B21\u4EA4\u6362\u6CA1\u6709\u5F62\u6210\u540C\u8272\u76F4\u7EBF\u4E09\u8FDE\uFF0C\u6362\u4E00\u53EA\u8BD5\u8BD5~";
+          this.setStatus("\u8FD9\u6B21\u4EA4\u6362\u6CA1\u6709\u5F62\u6210\u540C\u8272\u76F4\u7EBF\u4E09\u8FDE\uFF0C\u6362\u4E00\u53EA\u8BD5\u8BD5~");
           this.clearPreview();
           return;
         }
         this.setPreview(this.selected, upCell);
         this.hoverPreviewed = false;
         const dmg = (_b = (_a = this.preview.event) == null ? void 0 : _a.damage) != null ? _b : 0;
-        this.statusText = `\u9996\u8F6E\u9884\u8BA1 ${dmg} \u4F24\u5BB3 \xB7 \u518D\u70B9\u4E00\u6B21\u786E\u8BA4\u4EA4\u6362`;
+        this.setStatus(`\u9996\u8F6E\u9884\u8BA1 ${dmg} \u4F24\u5BB3 \xB7 \u518D\u70B9\u4E00\u6B21\u786E\u8BA4\u4EA4\u6362`);
       });
       this.platform.onPointerHover((sx, sy) => {
         if (this.isInputBlocked()) {
@@ -2388,8 +2611,22 @@
         }
       });
     }
-    spawnWaveBurstEffects(event, cells, waveIndex) {
+    spawnWaveBurstEffects(event, sources, cells, waveIndex) {
       if (cells.length === 0) return;
+      const waveColor = WAVE_COLORS[Math.min(waveIndex, WAVE_COLORS.length - 1)];
+      const ringLife = 0.42 / this.speed;
+      for (const src of sources) {
+        const p = this.cellPoint(src);
+        this.shockwaves.push({
+          x: p.x,
+          y: p.y,
+          color: waveColor,
+          radius: 28,
+          maxRadius: 155 + Math.min(waveIndex, 3) * 28,
+          life: ringLife,
+          maxLife: ringLife
+        });
+      }
       const count = Math.min(cells.length * 2, 24);
       for (let k = 0; k < count; k++) {
         const cell = cells[k % cells.length];
@@ -2443,10 +2680,24 @@
       const text = event.shieldBlocked > 0 ? `\u2212${event.damage} (\u76FE\u6321${event.shieldBlocked})` : event.trueDamage > 0 ? `\u2212${event.damage} (\u771F\u4F24${event.trueDamage})` : `\u2212${event.damage}`;
       this.spawnFloatingText(text, y, event.trueDamage > 0 ? "#9333ea" : "#e54d42");
     }
+    pushComboLog(delta, label, color, deltaText) {
+      if (!this.comboTracker) return;
+      this.comboTracker.totalDamage = Math.max(0, this.comboTracker.totalDamage + delta);
+      this.comboTracker.pulse = 1;
+      this.comboTracker.logs.push({
+        label,
+        deltaText: deltaText != null ? deltaText : delta >= 0 ? `+${delta}` : `${delta}`,
+        color
+      });
+      if (this.comboTracker.logs.length > 6) {
+        this.comboTracker.logs.shift();
+      }
+    }
     async submitSwap(a, b, isBossAction = false) {
       if (this.busy && !isBossAction) return;
       if (!validSwap(this.state, a, b)) {
-        this.statusText = "\u8FD9\u6B21\u4EA4\u6362\u6CA1\u6709\u5F62\u6210\u540C\u8272\u76F4\u7EBF\u4E09\u8FDE\uFF0C\u6362\u4E00\u53EA\u8BD5\u8BD5~";
+        this.sound.playInvalid();
+        this.setStatus("\u8FD9\u6B21\u4EA4\u6362\u6CA1\u6709\u5F62\u6210\u540C\u8272\u76F4\u7EBF\u4E09\u8FDE\uFF0C\u6362\u4E00\u53EA\u8BD5\u8BD5~");
         this.selected = -1;
         this.clearPreview();
         return;
@@ -2463,15 +2714,37 @@
       this.clearPreview();
       this.hoverPreviewed = false;
       this.bossHighlightSwap = null;
-      await this.animateBoardPositions(result.swapped, 0.2);
+      const actorLabel = this.gameMode === "roguelike" ? attacker === 0 ? "\u4F60" : getBossProfile(this.run.stageIndex).name : `\u73A9\u5BB6 ${attacker + 1}`;
+      this.comboTracker = {
+        active: true,
+        actorLabel,
+        isPlayer: attacker === 0,
+        totalDamage: 0,
+        rounds: 0,
+        blastWaves: 0,
+        trueDamage: 0,
+        shieldBlocked: 0,
+        pulse: 0,
+        holdLife: 1.5,
+        maxHold: 1.5,
+        logs: []
+      };
+      this.sound.playSwap();
+      await this.animateBoardPositions(result.swapped, 0.22);
       let turnTotalDamage = 0;
       for (let idx = 0; idx < result.events.length; idx++) {
         const event = result.events[idx];
         turnTotalDamage += event.damage;
         this.currentEvent = event;
-        const actorLabel = this.gameMode === "roguelike" ? attacker === 0 ? "\u4F60" : getBossProfile(this.run.stageIndex).name : `\u73A9\u5BB6 ${attacker + 1}`;
-        this.statusText = `${actorLabel} \xB7 \u7B2C ${event.number} \u8F6E \xB7 \u57FA\u7840 ${event.baseDamage} + \u9644\u52A0 ${event.bonus} = ${event.damage} \u4F24`;
-        await this.waitSec(0.24);
+        this.activeEventPhase = "match";
+        this.activeWaveIndex = -1;
+        this.comboTracker.rounds = event.number;
+        this.setStatus(`${actorLabel} \xB7 \u7B2C ${event.number} \u8F6E \xB7 \u57FA\u7840 ${event.baseDamage} + \u9644\u52A0 ${event.bonus} = ${event.damage} \u4F24`);
+        if (idx > 0) {
+          this.sound.playCombo(event.number);
+          this.showBanner(`\u7B2C ${event.number} \u8F6E\u8FDE\u9501\uFF01`, 0.78, "sparkle");
+        }
+        await this.waitSec(idx > 0 ? 0.36 : 0.28);
         const mergeItems = [];
         for (const center of event.centers) {
           const cp = this.cellPoint(center.cell);
@@ -2485,7 +2758,10 @@
           }
         }
         if (mergeItems.length > 0) {
-          await this.runTween(0.22, "cubicInOut", (t) => {
+          this.activeEventPhase = "merge";
+          const hasRainbowCenter = event.centers.some((c) => c.resultLevel === 3);
+          this.sound.playMerge(hasRainbowCenter ? 3 : 2);
+          await this.runTween(0.26, "cubicInOut", (t) => {
             for (const m of mergeItems) {
               m.vis.x = m.sx + (m.tx - m.sx) * t;
               m.vis.y = m.sy + (m.ty - m.sy) * t;
@@ -2493,27 +2769,64 @@
             }
           });
         }
+        let waveShownDamage = 0;
         if (event.waves.length > 0) {
-          for (const wave of event.waves) {
+          this.activeEventPhase = "wave";
+          for (let w = 0; w < event.waves.length; w++) {
+            const wave = event.waves[w];
+            this.activeWaveIndex = w;
+            const pulseTargets = wave.sources.map((c) => event.before[c]).filter((c) => Boolean(c)).map((c) => this.visuals.get(c.id)).filter((v) => Boolean(v));
             if (wave.wave > 0) {
-              this.statusText = `${actorLabel} \xB7 \u7B2C ${event.number} \u8F6E \xB7 \u7B2C ${wave.wave} \u6CE2\u8FDE\u9501\u4E8C\u6B21\u5F15\u7206\uFF01`;
-              const pulseTargets = wave.sources.map((c) => event.before[c]).filter((c) => Boolean(c)).map((c) => this.visuals.get(c.id)).filter((v) => Boolean(v));
-              if (pulseTargets.length > 0) {
-                await this.runTween(0.14, "backOut", (t) => {
-                  for (const v of pulseTargets) v.scale = 1 + 0.35 * t;
-                });
-              }
+              this.setStatus(`${actorLabel} \xB7 \u7B2C ${event.number} \u8F6E \xB7 \u7B2C ${wave.wave} \u6CE2\u8FDE\u9501\u4E8C\u6B21\u5F15\u7206\uFF01`);
+              this.showBanner(`${wave.wave + 1} \u8FDE\u7206\uFF01`, 0.65, "blast");
             }
-            this.spawnWaveBurstEffects(event, wave.cells, wave.wave);
+            const chargeDur = wave.wave === 0 ? 0.18 : 0.28;
+            const chargeScale = wave.wave === 0 ? 0.24 : 0.38;
+            if (pulseTargets.length > 0) {
+              await this.runTween(chargeDur, "backOut", (t) => {
+                for (const v of pulseTargets) v.scale = 1 + chargeScale * t;
+              });
+            } else {
+              await this.waitSec(chargeDur);
+            }
+            this.sound.playBlast(wave.wave);
+            this.spawnWaveBurstEffects(event, wave.sources, wave.cells, wave.wave);
+            this.comboTracker.blastWaves += 1;
+            waveShownDamage += wave.damage;
+            const waveCol = WAVE_COLORS[Math.min(wave.wave, WAVE_COLORS.length - 1)];
+            const waveKindLabel = wave.kind === "rainbow" ? "\u70AB\u5F69\u5168\u7206" : wave.wave === 0 ? "W0 \u5BBD\u5149\u675F\u8D77\u7206" : `\u21B3 W${wave.wave} \u4E8C\u6B21\u5F15\u7206`;
+            this.pushComboLog(wave.damage, `R${event.number} ${waveKindLabel}`, waveCol);
             for (const cell of wave.cells) {
               const orig = event.before[cell];
               if (orig) this.visuals.delete(orig.id);
             }
-            await this.waitSec(wave.wave === 0 ? 0.3 : 0.28);
+            await this.waitSec(wave.wave === 0 ? 0.36 : 0.42);
           }
+          this.activeWaveIndex = -1;
         } else {
           this.platform.vibrate("light");
         }
+        this.comboTracker.trueDamage += event.trueDamage;
+        this.comboTracker.shieldBlocked += event.shieldBlocked;
+        if (event.waves.length === 0) {
+          const hasRainbow = event.centers.some((c) => c.resultLevel === 3);
+          const mergeTag = hasRainbow ? "\u5408\u6210\u70AB\u5F69\u732B" : "\u5408\u6210\u5927\u732B";
+          const comboTag = event.bonus > 0 ? ` \xB7 \u8FDE\u9501+${event.bonus}` : "";
+          this.pushComboLog(event.damage, `R${event.number} ${mergeTag}${comboTag}`, "#d97706");
+        } else {
+          const delta = event.damage - waveShownDamage;
+          if (delta > 0) {
+            const extraTag = event.trueDamage > 0 ? `\u771F\u4F24+${event.trueDamage} / \u52A0\u6210` : event.bonus > 0 ? `\u8FDE\u9501/\u795D\u798F\u52A0\u6210` : "\u795D\u798F\u589E\u4F24";
+            this.pushComboLog(
+              delta,
+              `R${event.number} ${extraTag}`,
+              event.trueDamage > 0 ? "#9333ea" : "#e54d42"
+            );
+          } else if (delta < 0) {
+            this.pushComboLog(delta, `R${event.number} \u51CF\u4F24\u751F\u6548`, "#2563eb", `${delta}`);
+          }
+        }
+        this.activeEventPhase = "collapse";
         this.syncVisuals(event.afterClear);
         this.state.hp = [event.hp[0], event.hp[1]];
         if (this.state.shield) {
@@ -2532,7 +2845,7 @@
           }
         }
         if (newBigs.length > 0) {
-          void this.runTween(0.28, "backOut", (t) => {
+          await this.runTween(0.28, "backOut", (t) => {
             for (const v of newBigs) v.scale = 0.4 + 0.6 * t;
           });
         }
@@ -2573,7 +2886,7 @@
             this.visuals.set(vis.id, vis);
             spawns.push({ vis, sx, sy, tx: tp.x, ty: tp.y });
           }
-          await this.runTween(0.25, "backOut", (t) => {
+          await this.runTween(0.26, "backOut", (t) => {
             const posT = Math.min(1, t);
             for (const s of spawns) {
               s.vis.x = s.sx + (s.tx - s.sx) * posT;
@@ -2583,25 +2896,38 @@
           });
         }
         this.currentEvent = null;
-        if (useSteps && idx < result.events.length - 1) {
-          this.statusText += " \xB7 \u70B9\u51FB\u201C\u4E0B\u4E00\u8F6E \u25B6\u201D\u7EE7\u7EED";
-          await this.waitForNextStep();
+        this.activeEventPhase = "none";
+        this.activeWaveIndex = -1;
+        if (idx < result.events.length - 1) {
+          if (useSteps) {
+            this.statusText += " \xB7 \u70B9\u51FB\u201C\u4E0B\u4E00\u8F6E\u201D\u7EE7\u7EED";
+            await this.waitForNextStep();
+          } else {
+            await this.waitSec(0.24);
+          }
         }
       }
       this.state = result.state;
+      this.ambientAnims = [];
+      this.ambientSpawnTimer = 1.4;
       this.syncVisuals(this.state.board);
       this.legalCount = findLegalSwaps(this.state).length;
       this.computeTurnSummary(result.events);
+      if (this.comboTracker) {
+        this.comboTracker.active = false;
+        this.comboTracker.holdLife = 1.5;
+        this.comboTracker.maxHold = 1.5;
+      }
       if (this.gameMode === "roguelike") {
         await this.handleRoguelikePostSwap(attacker, result.events, turnTotalDamage, result.notice);
         return;
       }
       if (this.state.winner >= 0) {
-        this.statusText = `\u73A9\u5BB6 ${this.state.winner + 1} \u83B7\u80DC\uFF01\u53EF\u70B9\u201C\u540C\u5C40\u91CD\u5F00\u201D\u518D\u6218\u4E00\u5C40`;
+        this.setStatus(`\u73A9\u5BB6 ${this.state.winner + 1} \u83B7\u80DC\uFF01\u53EF\u70B9\u201C\u540C\u5C40\u91CD\u5F00\u201D\u518D\u6218\u4E00\u5C40`);
       } else if (result.notice) {
-        this.statusText = result.notice;
+        this.setStatus(result.notice);
       } else {
-        this.statusText = `\u8F6E\u5230\u73A9\u5BB6 ${this.state.player + 1} \xB7 \u7559\u610F\u5BF9\u624B\u7559\u4E0B\u7684\u5927\u732B`;
+        this.setStatus(`\u8F6E\u5230\u73A9\u5BB6 ${this.state.player + 1} \xB7 \u7559\u610F\u5BF9\u624B\u7559\u4E0B\u7684\u5927\u732B`);
       }
       this.refreshPlayerTurnGuides();
       this.busy = false;
@@ -2625,6 +2951,7 @@
         if (this.state.winner === 0) {
           this.run.defeatedBosses.push(boss.id);
           this.bossIntent = null;
+          this.sound.playVictory();
           if (this.run.stageIndex < BOSSES.length - 1) {
             this.run.playerHp = Math.min(this.run.playerMaxHp, this.run.playerHp + STAGE_CLEAR_HEAL);
             this.state.hp[0] = this.run.playerHp;
@@ -2633,20 +2960,20 @@
               this.run.seed + (this.run.stageIndex + 1) * 7919 + this.run.totalTurns * 13
             );
             this.run.phase = "reward";
-            this.statusText = `\u51FB\u8D25 ${boss.name}\uFF01\u56DE\u590D +${STAGE_CLEAR_HEAL} HP\uFF0C\u9009 1 \u4E2A\u732B\u732B\u795D\u798F`;
-            this.showBanner(`\u{1F389} \u51FB\u8D25 ${boss.name}\uFF01`, 1.5);
+            this.setStatus(`\u51FB\u8D25 ${boss.name}\uFF01\u56DE\u590D +${STAGE_CLEAR_HEAL} HP\uFF0C\u9009 1 \u4E2A\u732B\u732B\u795D\u798F`, "trophy");
+            this.showBanner(`\u51FB\u8D25 ${boss.name}\uFF01`, 1.5, "trophy");
           } else {
             this.run.phase = "victory";
-            this.statusText = "\u{1F3C6} \u5168\u90E8\u732B\u6897 Boss \u5DF2\u51FB\u8D25\uFF0C\u732B\u5C4B\u5927\u6377\uFF01";
-            this.showBanner("\u{1F3C6} \u901A\u5173\u5927\u6377\uFF01", 1.8);
+            this.setStatus("\u5168\u90E8\u732B\u6897 Boss \u5DF2\u51FB\u8D25\uFF0C\u732B\u5C4B\u5927\u6377\uFF01", "trophy");
+            this.showBanner("\u901A\u5173\u5927\u6377\uFF01", 1.8, "trophy");
           }
           this.busy = false;
           return;
         }
         if (notice) {
-          this.statusText = notice;
+          this.setStatus(notice);
         } else if (post.notes.length > 0) {
-          this.statusText = `\u795D\u798F\u751F\u6548\uFF1A${post.notes.join(" \xB7 ")}`;
+          this.setStatus(`\u795D\u798F\u751F\u6548\uFF1A${post.notes.join(" \xB7 ")}`);
         }
         await this.waitSec(0.45);
         await this.runBossTurn();
@@ -2654,7 +2981,7 @@
         const bossPost = applyBossPostTurnPassive(this.state, boss, events);
         if (bossPost.bossHealed > 0) {
           this.spawnFloatingText(`+${bossPost.bossHealed} HP`, 118, "#16a34a", 340);
-          this.showBanner(`\u{1F35A} \u5927\u6A58\u5E72\u996D\u56DE\u8840 +${bossPost.bossHealed} HP\uFF01`, 1.2);
+          this.showBanner(`\u5927\u6A58\u5E72\u996D\u56DE\u8840 +${bossPost.bossHealed} HP\uFF01`, 1.2, "rice");
         }
         this.run.calmDefuseActive = false;
         this.run.bossTurnsTaken += 1;
@@ -2664,12 +2991,13 @@
         if (this.state.winner === 1 || this.run.playerHp <= 0) {
           this.run.phase = "defeat";
           this.bossIntent = null;
-          this.statusText = `\u88AB ${boss.name} \u6320\u8DB4\u5566\uFF01\u70B9\u51FB\u91CD\u65B0\u6311\u6218`;
+          this.sound.playDefeat();
+          this.setStatus(`\u88AB ${boss.name} \u6320\u8DB4\u5566\uFF01\u70B9\u51FB\u91CD\u65B0\u6311\u6218`);
           this.busy = false;
           return;
         }
         if (notice) {
-          this.statusText = notice;
+          this.setStatus(notice);
           await this.waitSec(0.4);
         }
         this.refreshPlayerTurnGuides();
@@ -2679,13 +3007,16 @@
     async runBossTurn() {
       var _a, _b;
       const boss = getBossProfile(this.run.stageIndex);
-      this.statusText = `\u8F6E\u5230 ${boss.name} \u884C\u52A8...`;
+      this.setStatus(`\u8F6E\u5230 ${boss.name} \u884C\u52A8...`);
       const skill = applyBossPreTurnSkill(this.state, boss, this.run.bossTurnsTaken);
       if (skill.triggered) {
         this.run.bossShield = this.state.shield ? this.state.shield[1] : 0;
+        this.ambientAnims = [];
+        this.ambientSpawnTimer = 1.4;
         this.syncVisuals(this.state.board);
-        this.showBanner(skill.banner, 1.5);
-        this.statusText = skill.banner;
+        const skillIcon = boss.id === "cow" ? "bolt" : "crown";
+        this.showBanner(skill.banner, 1.5, skillIcon);
+        this.setStatus(skill.banner, skillIcon);
         if (skill.shieldGained > 0) {
           this.spawnFloatingText(`+${skill.shieldGained} \u76FE`, 118, "#2563eb", 470);
         }
@@ -2705,8 +3036,9 @@
       let chosenSwap = (_b = (_a = this.bossIntent) == null ? void 0 : _a.swap) != null ? _b : null;
       if (!chosenSwap || !validSwap(this.state, chosenSwap[0], chosenSwap[1])) {
         if (chosenSwap) {
-          this.showBanner("\u{1F3AF} \u610F\u56FE\u88AB\u4F60\u62C6\u7A7F\uFF01Boss \u4E34\u65F6\u6362\u62DB\uFF01", 1.3);
-          this.statusText = `\u{1F3AF} \u4F60\u62C6\u7A7F\u4E86 ${boss.name} \u7684\u8BA1\u5212\uFF0C\u5B83\u6B63\u5728\u91CD\u65B0\u627E\u6B65...`;
+          this.sound.playChime();
+          this.showBanner("\u610F\u56FE\u88AB\u4F60\u62C6\u7A7F\uFF01Boss \u4E34\u65F6\u6362\u62DB\uFF01", 1.3, "target");
+          this.setStatus(`\u4F60\u62C6\u7A7F\u4E86 ${boss.name} \u7684\u8BA1\u5212\uFF0C\u5B83\u6B63\u5728\u91CD\u65B0\u627E\u6B65...`, "target");
           await this.waitSec(0.42);
         }
         const mult = this.run.calmDefuseActive ? 0.7 : 1;
@@ -2720,8 +3052,8 @@
         return;
       }
       this.bossHighlightSwap = chosenSwap;
-      this.statusText = `${boss.name} \u51FA\u624B\u4EA4\u6362\uFF01`;
-      await this.waitSec(0.38);
+      this.setStatus(`${boss.name} \u51FA\u624B\u4EA4\u6362\uFF01`);
+      await this.waitSec(0.58);
       await this.submitSwap(chosenSwap[0], chosenSwap[1], true);
     }
     computeTurnSummary(events) {
@@ -2751,9 +3083,7 @@
     }
     update(dt) {
       this.elapsed += dt;
-      if (!this.busy && !this.isInputBlocked()) {
-        this.idleSeconds += dt;
-      }
+      this.updateAmbientAnims(dt);
       if (this.grabbedCell >= 0) {
         this.grabElapsed += dt;
         const follow = Math.min(1, dt * 22);
@@ -2768,6 +3098,17 @@
       }
       if (this.bannerLife > 0) {
         this.bannerLife = Math.max(0, this.bannerLife - dt);
+      }
+      if (this.comboTracker) {
+        if (this.comboTracker.pulse > 0) {
+          this.comboTracker.pulse = Math.max(0, this.comboTracker.pulse - dt * 4.5);
+        }
+        if (!this.comboTracker.active) {
+          this.comboTracker.holdLife -= dt;
+          if (this.comboTracker.holdLife <= 0) {
+            this.comboTracker = null;
+          }
+        }
       }
       for (let i = this.tweens.length - 1; i >= 0; i--) {
         const tw = this.tweens[i];
@@ -2793,6 +3134,16 @@
         g.vy *= 0.94;
         g.rot += g.vRot * dt;
       }
+      for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+        const r = this.shockwaves[i];
+        r.life -= dt;
+        if (r.life <= 0) {
+          this.shockwaves.splice(i, 1);
+          continue;
+        }
+        const p = 1 - Math.max(0, r.life / r.maxLife);
+        r.radius = 28 + (r.maxRadius - 28) * easeCubicInOut(p);
+      }
       for (let i = this.floatings.length - 1; i >= 0; i--) {
         const f = this.floatings[i];
         f.life -= dt;
@@ -2802,6 +3153,37 @@
         }
         f.y -= 52 * dt * this.speed;
       }
+    }
+    /** 全局稀疏点缀：每隔约 1.6~2.8 秒挑 1 只静卧猫轻眨眼或轻甩尾，同屏最多 2 只 */
+    updateAmbientAnims(dt) {
+      for (let i = this.ambientAnims.length - 1; i >= 0; i--) {
+        const a = this.ambientAnims[i];
+        a.elapsed += dt;
+        if (a.elapsed >= a.duration || !this.visuals.has(a.catId) || a.catId === this.grabbedCatId) {
+          this.ambientAnims.splice(i, 1);
+        }
+      }
+      if (this.busy || this.ambientAnims.length >= 2) return;
+      this.ambientSpawnTimer -= dt;
+      if (this.ambientSpawnTimer > 0) return;
+      this.ambientSpawnTimer = 1.6 + Math.random() * 1.2;
+      const busyIds = new Set(this.ambientAnims.map((a) => a.catId));
+      const candidates = [];
+      for (const vis of this.visuals.values()) {
+        if (vis.id === this.grabbedCatId || busyIds.has(vis.id)) continue;
+        candidates.push(vis.id);
+      }
+      if (candidates.length === 0) return;
+      const preferred = candidates.length > 1 ? candidates.filter((id) => id !== this.lastAmbientCatId) : candidates;
+      const catId = preferred[Math.floor(Math.random() * preferred.length)];
+      const isBlink = Math.random() < 0.58;
+      this.lastAmbientCatId = catId;
+      this.ambientAnims.push({
+        catId,
+        frame: isBlink ? 2 : 1,
+        elapsed: 0,
+        duration: isBlink ? 0.28 : 0.85
+      });
     }
     /** 绘制手绘六边形缝线猫窝 */
     drawCatNest(ctx, cx, cy, rimColor, isSelected, isPreviewTarget) {
@@ -2830,8 +3212,8 @@
       ctx.setLineDash([]);
       ctx.restore();
     }
-    /** 绘制手绘珊瑚粉星星爆发射线（还原概念图核心特效） */
-    drawStarBlastArrow(ctx, ax, ay, bx, by) {
+    /** 绘制手绘星星爆发射线（支持按波次着色） */
+    drawStarBlastArrow(ctx, ax, ay, bx, by, strokeColor = "#ff7e70") {
       const dx = bx - ax;
       const dy = by - ay;
       const len = Math.hypot(dx, dy);
@@ -2858,7 +3240,7 @@
       };
       ctx.save();
       drawStroke("#ffffff", 14);
-      drawStroke("#ff7e70", 7.5);
+      drawStroke(strokeColor, 7.5);
       const starCount = len > 180 ? 3 : 2;
       for (let i = 1; i <= starCount; i++) {
         const t = i / (starCount + 1);
@@ -2898,6 +3280,26 @@
       ctx.stroke();
       ctx.restore();
     }
+    drawUiIcon(ctx, key, cx, cy, size) {
+      const image = this.assets.icons[key];
+      if (!(image == null ? void 0 : image.ready)) return false;
+      ctx.drawImage(image.el, cx - size / 2, cy - size / 2, size, size);
+      return true;
+    }
+    drawCenteredIconText(ctx, icon, text, centerX, centerY, iconSize, gap) {
+      let textX = centerX;
+      if (icon) {
+        const iconX = centerX - (ctx.measureText(text).width + gap) / 2;
+        if (this.drawUiIcon(ctx, icon, iconX, centerY, iconSize)) {
+          textX += (iconSize + gap) / 2;
+        }
+      }
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, textX, centerY);
+      ctx.restore();
+    }
     /** 手绘贴纸风按钮 */
     drawStickerButton(ctx, btn) {
       this.buttons.push(btn);
@@ -2918,7 +3320,11 @@
       ctx.font = `800 ${btn.round ? 26 : 18}px ${FONT_FAMILY2}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 1);
+      const cx = btn.x + btn.w / 2;
+      const cy = btn.y + btn.h / 2;
+      if (!btn.icon || !this.drawUiIcon(ctx, btn.icon, cx, cy, Math.min(btn.w, btn.h) * 0.72)) {
+        ctx.fillText(btn.label, cx, cy + 1);
+      }
       ctx.restore();
     }
     /** 手绘贴纸风玩家 / Boss 血条（支持护盾与肉鸽专属 Boss 贴纸头像） */
@@ -2930,7 +3336,7 @@
       const maxHp = this.state.maxHp ? this.state.maxHp[player] : HP;
       const shield = this.state.shield ? this.state.shield[player] : 0;
       const barX = 96;
-      const barW = player === 1 ? 522 : 596;
+      const barW = player === 1 ? 460 : 596;
       const barH = 48;
       const radius = barH / 2;
       ctx.save();
@@ -2954,10 +3360,10 @@
       drawRoundedRect(ctx, barX, y, barW, barH, radius);
       ctx.stroke();
       ctx.fillStyle = INK2;
-      ctx.font = `900 22px ${FONT_FAMILY2}`;
+      ctx.font = `900 ${player === 1 ? 20 : 22}px ${FONT_FAMILY2}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      const centerX = barX + barW * 0.5;
+      const centerX = shield > 0 ? barX + (barW - 84) * 0.5 : barX + barW * 0.5;
       let label = "";
       if (isRogue && boss) {
         if (player === 1) {
@@ -2967,7 +3373,7 @@
           label = `\u4F60  ${this.state.hp[0]}/${maxHp}${calmTag}`;
         }
       } else {
-        const suffix = isWinner ? "  \u2605 \u83B7\u80DC" : isTurn ? "  \xB7 \u5F53\u524D\u56DE\u5408" : "";
+        const suffix = isWinner ? "  \xB7 \u83B7\u80DC" : isTurn ? "  \xB7 \u5F53\u524D\u56DE\u5408" : "";
         label = `P${player + 1}  ${this.state.hp[player]}${suffix}`;
       }
       ctx.fillText(label, centerX, y + barH / 2 + 1);
@@ -2984,7 +3390,7 @@
         ctx.stroke();
         ctx.fillStyle = "#1d4ed8";
         ctx.font = `900 16px ${FONT_FAMILY2}`;
-        ctx.fillText(`\u{1F6E1} ${shield}`, sx + sw / 2, sy + sh / 2 + 1);
+        this.drawCenteredIconText(ctx, "shield", `${shield}`, sx + sw / 2, sy + sh / 2 + 1, 22, 4);
       }
       const avatar = player === 0 ? this.assets.avatarP1 : isRogue && boss ? this.assets.bosses[boss.id] : this.assets.avatarP2;
       if (avatar.ready) {
@@ -3012,7 +3418,7 @@
       }
     }
     render() {
-      var _a, _b, _c;
+      var _a, _b, _c, _d;
       const ctx = this.platform.ctx;
       this.buttons = [];
       ctx.save();
@@ -3036,7 +3442,12 @@
         ctx.fillStyle = INK_SOFT;
         ctx.font = `700 15px ${FONT_FAMILY2}`;
         const skillBadge = boss.id === "orange" ? boss.traitShort : this.bossIntent ? this.bossIntent.skillText : boss.traitShort;
-        ctx.fillText(`\xB7  ${skillBadge}`, 212, 61);
+        const skillIcon = ((_a = this.bossIntent) == null ? void 0 : _a.skillReady) && boss.id !== "orange" ? boss.id === "cow" ? "bolt" : "crown" : null;
+        if (skillIcon && this.drawUiIcon(ctx, skillIcon, 223, 60, 22)) {
+          ctx.fillText(skillBadge, 238, 61);
+        } else {
+          ctx.fillText(`\xB7  ${skillBadge}`, 212, 61);
+        }
         for (let s = 0; s < BOSSES.length; s++) {
           const dx = 550 + s * 20;
           const dy = 60;
@@ -3052,11 +3463,29 @@
       }
       this.drawPlayerBar(ctx, 1, 92);
       this.drawStickerButton(ctx, {
+        id: "sound",
+        x: 568,
+        y: 89,
+        w: 54,
+        h: 54,
+        icon: this.sound.isMuted() ? "sound_off" : "sound_on",
+        label: this.sound.isMuted() ? "\u9759" : "\u97F3",
+        round: true,
+        accent: !this.sound.isMuted(),
+        onClick: () => {
+          const nowMuted = this.sound.toggleMute();
+          if (!nowMuted) {
+            this.sound.unlock();
+            this.sound.playChime();
+          }
+        }
+      });
+      this.drawStickerButton(ctx, {
         id: "rules",
-        x: 636,
-        y: 88,
-        w: 58,
-        h: 58,
+        x: 634,
+        y: 89,
+        w: 54,
+        h: 54,
         label: "?",
         round: true,
         onClick: () => {
@@ -3078,7 +3507,8 @@
       ctx.font = `700 17px ${FONT_FAMILY2}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(this.statusText, 42, 182);
+      const hasStatusIcon = this.statusIcon && this.drawUiIcon(ctx, this.statusIcon, 54, 181, 26);
+      ctx.fillText(this.statusText, hasStatusIcon ? 72 : 42, 182);
       ctx.restore();
       if (this.stepWaitResolver) {
         this.drawStickerButton(ctx, {
@@ -3087,7 +3517,7 @@
           y: 158,
           w: 158,
           h: 46,
-          label: "\u4E0B\u4E00\u8F6E \u25B6",
+          label: "\u4E0B\u4E00\u8F6E",
           accent: true,
           onClick: () => {
             const resolve = this.stepWaitResolver;
@@ -3101,7 +3531,8 @@
       const activeHintCells = /* @__PURE__ */ new Set();
       const activeHighCells = /* @__PURE__ */ new Set();
       const hintPartner = /* @__PURE__ */ new Map();
-      if (!this.isInputBlocked() && this.selected < 0 && this.grabbedCell < 0) {
+      const hintsUnlocked = this.gameMode === "roguelike" && hasHintRelic(this.run.relics);
+      if (hintsUnlocked && !this.isInputBlocked() && this.selected < 0 && this.grabbedCell < 0) {
         for (const [ha, hb] of this.hintSet.highValue) {
           activeHintCells.add(ha);
           activeHintCells.add(hb);
@@ -3110,7 +3541,7 @@
           hintPartner.set(ha, hb);
           hintPartner.set(hb, ha);
         }
-        if (activeHintCells.size === 0 && this.idleSeconds >= 3.5 && this.hintSet.fallback) {
+        if (activeHintCells.size === 0 && this.hintSet.fallback) {
           const [fa, fb] = this.hintSet.fallback;
           activeHintCells.add(fa);
           activeHintCells.add(fb);
@@ -3119,7 +3550,7 @@
         }
       }
       const bossLockedCells = /* @__PURE__ */ new Set();
-      const activeBossSwap = (_c = this.bossHighlightSwap) != null ? _c : this.gameMode === "roguelike" && !this.busy && this.selected < 0 && this.run.phase === "battle" ? (_b = (_a = this.bossIntent) == null ? void 0 : _a.swap) != null ? _b : null : null;
+      const activeBossSwap = (_d = this.bossHighlightSwap) != null ? _d : this.gameMode === "roguelike" && !this.busy && this.selected < 0 && this.run.phase === "battle" ? (_c = (_b = this.bossIntent) == null ? void 0 : _b.swap) != null ? _c : null : null;
       if (activeBossSwap) {
         bossLockedCells.add(activeBossSwap[0]);
         bossLockedCells.add(activeBossSwap[1]);
@@ -3127,7 +3558,7 @@
       for (let cell = 0; cell < CELL_COUNT; cell++) {
         const p = this.cellPoint(cell);
         const cat = this.state.board[cell];
-        const rimColor = !cat ? NEST_EMPTY_RIM : cat.level >= 2 ? NEST_BIG_RIM : NEST_RIM_COLORS[cat.color % 4];
+        const rimColor = !cat ? NEST_EMPTY_RIM : cat.level >= 2 ? NEST_BIG_RIM : NEST_RIM_COLORS[cat.color % NEST_RIM_COLORS.length];
         this.drawCatNest(
           ctx,
           p.x,
@@ -3172,13 +3603,18 @@
         const cat = this.state.board[c];
         if (cat) idToCell.set(cat.id, c);
       }
+      const ambientFrameMap = /* @__PURE__ */ new Map();
+      for (const a of this.ambientAnims) {
+        ambientFrameMap.set(a.catId, a.frame);
+      }
       for (const vis of this.visuals.values()) {
         if (vis.id === this.grabbedCatId) continue;
         const cell = idToCell.get(vis.id);
-        let animState = "idle";
+        let animState = "static";
         let flipX = false;
         let nudgeX = 0;
         let nudgeY = 0;
+        let forceFrame;
         if (cell !== void 0 && activeHintCells.has(cell)) {
           animState = "hint";
           const partner = hintPartner.get(cell);
@@ -3193,6 +3629,8 @@
             nudgeX = dx / dist * lean;
             nudgeY = dy / dist * lean;
           }
+        } else {
+          forceFrame = ambientFrameMap.get(vis.id);
         }
         drawCatSprite(
           ctx,
@@ -3206,7 +3644,8 @@
             elapsed: this.elapsed,
             animState,
             seedOffset: vis.id,
-            flipX
+            flipX,
+            forceFrame
           },
           this.assets
         );
@@ -3227,29 +3666,45 @@
           this.assets
         );
       }
-      const overlayEvent = this.preview.valid && this.preview.event ? this.preview.event : this.currentEvent;
-      if (overlayEvent) {
-        const waveColors = ["#ff9852", "#ff4d8d", "#a855f7", "#ec4899"];
+      for (const ring of this.shockwaves) {
+        const alpha = Math.max(0, ring.life / ring.maxLife);
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 11;
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = ring.color;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      const previewEvent = this.preview.valid && this.preview.event ? this.preview.event : null;
+      const overlayEvent = previewEvent != null ? previewEvent : this.currentEvent;
+      if (previewEvent) {
         const cellWaveMap = /* @__PURE__ */ new Map();
-        for (const wave of overlayEvent.waves) {
+        for (const wave of previewEvent.waves) {
           for (const cell of wave.cells) {
             cellWaveMap.set(cell, wave.wave);
           }
         }
-        for (const cell of overlayEvent.cleared) {
+        for (const cell of previewEvent.cleared) {
           const p = this.cellPoint(cell);
           const wIdx = cellWaveMap.get(cell);
-          ctx.strokeStyle = wIdx !== void 0 ? waveColors[Math.min(wIdx, waveColors.length - 1)] : "#ff9852";
+          ctx.strokeStyle = wIdx !== void 0 ? WAVE_COLORS[Math.min(wIdx, WAVE_COLORS.length - 1)] : "#ff9852";
           ctx.lineWidth = wIdx && wIdx > 0 ? 4.8 : 4;
           ctx.beginPath();
           ctx.arc(p.x, p.y, 48, 0, Math.PI * 2);
           ctx.stroke();
         }
-        for (const wave of overlayEvent.waves) {
+        for (const wave of previewEvent.waves) {
           if (wave.wave > 0) {
             for (const src of wave.sources) {
               const p = this.cellPoint(src);
-              ctx.strokeStyle = waveColors[Math.min(wave.wave, waveColors.length - 1)];
+              ctx.strokeStyle = WAVE_COLORS[Math.min(wave.wave, WAVE_COLORS.length - 1)];
               ctx.lineWidth = 4;
               ctx.setLineDash([6, 5]);
               ctx.beginPath();
@@ -3259,7 +3714,7 @@
             }
           }
         }
-        for (const center of overlayEvent.centers) {
+        for (const center of previewEvent.centers) {
           const p = this.cellPoint(center.cell);
           ctx.strokeStyle = "#38b583";
           ctx.lineWidth = 4.5;
@@ -3269,18 +3724,94 @@
           ctx.stroke();
           ctx.setLineDash([]);
         }
-        for (const path of overlayEvent.rays) {
+        for (const path of previewEvent.rays) {
           if (path.length >= 2) {
             const a = this.cellPoint(path[0]);
             const b = this.cellPoint(path[path.length - 1]);
             this.drawStarBlastArrow(ctx, a.x, a.y, b.x, b.y);
           }
         }
-        if (!this.currentEvent) {
-          for (const move of overlayEvent.moves) {
-            const a = this.cellPoint(move.from);
-            const b = this.cellPoint(move.to);
-            this.drawSimpleArrow(ctx, a.x, a.y, b.x, b.y, "#3bb5a5", 3.6);
+        for (const move of previewEvent.moves) {
+          const a = this.cellPoint(move.from);
+          const b = this.cellPoint(move.to);
+          this.drawSimpleArrow(ctx, a.x, a.y, b.x, b.y, "#3bb5a5", 3.6);
+        }
+      } else if (this.currentEvent) {
+        const ev = this.currentEvent;
+        if (this.activeEventPhase === "match") {
+          const matchedCells = /* @__PURE__ */ new Set();
+          for (const line of ev.lines) {
+            for (const c of line.cells) matchedCells.add(c);
+          }
+          ctx.save();
+          for (const cell of matchedCells) {
+            const p = this.cellPoint(cell);
+            ctx.strokeStyle = "#f59e0b";
+            ctx.lineWidth = 4.5;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 49, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          for (const center of ev.centers) {
+            const p = this.cellPoint(center.cell);
+            ctx.strokeStyle = "#38b583";
+            ctx.lineWidth = 4.8;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 54, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          ctx.restore();
+        } else if (this.activeEventPhase === "merge") {
+          ctx.save();
+          for (const center of ev.centers) {
+            const p = this.cellPoint(center.cell);
+            ctx.strokeStyle = center.resultLevel === 3 ? "#d946ef" : "#38b583";
+            ctx.lineWidth = 5;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 54, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          ctx.restore();
+        } else if (this.activeEventPhase === "wave" && this.activeWaveIndex >= 0) {
+          const wave = ev.waves[this.activeWaveIndex];
+          if (wave) {
+            const col = WAVE_COLORS[Math.min(wave.wave, WAVE_COLORS.length - 1)];
+            ctx.save();
+            for (const cell of wave.cells) {
+              const p = this.cellPoint(cell);
+              traceRoundedHexagon(ctx, p.x, p.y, HEX_RADIUS - 4, 10);
+              ctx.globalAlpha = 0.22;
+              ctx.fillStyle = col;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.strokeStyle = col;
+              ctx.lineWidth = wave.wave > 0 ? 4.8 : 4;
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, 48, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            for (const src of wave.sources) {
+              const p = this.cellPoint(src);
+              ctx.strokeStyle = col;
+              ctx.lineWidth = 5;
+              ctx.setLineDash([7, 5]);
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, 58, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
+            ctx.restore();
+            for (const path of wave.rays) {
+              if (path.length >= 2) {
+                const a = this.cellPoint(path[0]);
+                const b = this.cellPoint(path[path.length - 1]);
+                this.drawStarBlastArrow(ctx, a.x, a.y, b.x, b.y, col);
+              }
+            }
           }
         }
       }
@@ -3308,7 +3839,7 @@
           ctx.save();
           ctx.fillStyle = "rgba(78, 52, 46, 0.24)";
           ctx.beginPath();
-          ctx.ellipse(this.grabSmoothX, this.grabSmoothY + 52, 26, 10, 0, 0, Math.PI * 2);
+          ctx.ellipse(this.grabSmoothX, this.grabSmoothY + 56, 26, 10, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
           const popScale = 1 + Math.min(1, this.grabElapsed / 0.1) * 0.18;
@@ -3346,16 +3877,19 @@
       }
       this.drawPlayerBar(ctx, 0, 1054);
       if (this.gameMode === "roguelike" && this.run.relics.length > 0) {
-        const startX = 128;
+        const count = this.run.relics.length;
+        const badgeW = count >= 3 ? 184 : 186;
+        const gap = 12;
+        const startX = count >= 3 ? 116 : 128;
         const badgeY = 1e3;
-        for (let i = 0; i < this.run.relics.length; i++) {
+        for (let i = 0; i < count; i++) {
           const def = getRelicDef(this.run.relics[i]);
-          const rx = startX + i * 192;
+          const rx = startX + i * (badgeW + gap);
           ctx.save();
           ctx.fillStyle = "rgba(255, 250, 240, 0.94)";
           ctx.strokeStyle = def.badgeColor;
           ctx.lineWidth = 2.6;
-          drawRoundedRect(ctx, rx, badgeY, 182, 38, 19);
+          drawRoundedRect(ctx, rx, badgeY, badgeW, 38, 19);
           ctx.fill();
           ctx.stroke();
           const icon = this.assets.relics[def.branch];
@@ -3517,8 +4051,11 @@
         ctx.font = `900 22px ${FONT_FAMILY2}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(this.bannerText, VIRTUAL_W / 2, by + bh / 2 + 1);
+        this.drawCenteredIconText(ctx, this.bannerIcon, this.bannerText, VIRTUAL_W / 2, by + bh / 2 + 1, 32, 8);
         ctx.restore();
+      }
+      if (this.comboTracker && !this.stepWaitResolver) {
+        this.renderComboTracker(ctx, this.comboTracker);
       }
       if (this.showRulesModal) {
         this.renderRulesModal(ctx);
@@ -3526,10 +4063,90 @@
         this.renderRelicsModal(ctx);
       } else if (this.showDebugPanel) {
         this.renderDebugPanel(ctx);
-      } else if (this.gameMode === "roguelike" && this.run.phase === "reward") {
+      } else if (this.gameMode === "roguelike" && (this.run.phase === "opening_reward" || this.run.phase === "reward")) {
         this.renderRewardModal(ctx);
       } else if (this.gameMode === "roguelike" && (this.run.phase === "victory" || this.run.phase === "defeat")) {
         this.renderRunEndModal(ctx);
+      }
+      ctx.restore();
+    }
+    renderComboTracker(ctx, ct) {
+      const fadeAlpha = ct.active ? 1 : Math.max(0, Math.min(1, ct.holdLife / 0.45));
+      if (fadeAlpha <= 0.01) return;
+      const x = 24;
+      const y = 152;
+      const w = 672;
+      const h = 88;
+      const accent = ct.isPlayer ? "#e67e22" : "#dc2626";
+      ctx.save();
+      ctx.globalAlpha = fadeAlpha;
+      ctx.fillStyle = "rgba(78, 52, 46, 0.18)";
+      drawRoundedRect(ctx, x, y + 4, w, h, 20);
+      ctx.fill();
+      ctx.fillStyle = ct.isPlayer ? "rgba(255, 251, 240, 0.97)" : "rgba(255, 242, 242, 0.97)";
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 3.2;
+      drawRoundedRect(ctx, x, y, w, h, 20);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = INK_SOFT;
+      ctx.font = `800 14px ${FONT_FAMILY2}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      const metaParts = [`${ct.actorLabel} \xB7 \u8FDE\u51FB\u6218\u62A5`];
+      if (ct.rounds > 0) metaParts.push(`${ct.rounds}\u8F6E`);
+      if (ct.blastWaves > 0) metaParts.push(`${ct.blastWaves}\u6CE2\u7206`);
+      ctx.fillText(metaParts.join(" \xB7 "), x + 18, y + 23);
+      const popScale = 1 + 0.22 * Math.sin(ct.pulse * Math.PI);
+      ctx.save();
+      ctx.translate(x + 18, y + 58);
+      ctx.scale(popScale, popScale);
+      ctx.fillStyle = ct.isPlayer ? "#d9534f" : "#b91c1c";
+      ctx.font = `900 32px ${FONT_FAMILY2}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      const hasBlastIcon = this.drawUiIcon(ctx, "blast", 15, 0, 30);
+      ctx.fillText(`${ct.totalDamage} \u4F24`, hasBlastIcon ? 36 : 0, 0);
+      ctx.restore();
+      if (ct.trueDamage > 0 || ct.shieldBlocked > 0) {
+        const tagText = ct.trueDamage > 0 ? `\u771F\u4F24 ${ct.trueDamage}` : `\u76FE\u6321 ${ct.shieldBlocked}`;
+        ctx.fillStyle = ct.trueDamage > 0 ? "#7e22ce" : "#1d4ed8";
+        ctx.font = `800 13px ${FONT_FAMILY2}`;
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+        ctx.fillText(tagText, x + 238, y + 60);
+      }
+      ctx.strokeStyle = "rgba(78, 52, 46, 0.24)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x + 250, y + 14);
+      ctx.lineTo(x + 250, y + h - 14);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const recent = ct.logs.slice(-3);
+      if (recent.length === 0) {
+        ctx.fillStyle = INK_SOFT;
+        ctx.font = `700 16px ${FONT_FAMILY2}`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText("\u6B63\u5728\u7ED3\u7B97\u672C\u56DE\u5408\u8FDE\u51FB...", x + 266, y + h / 2);
+      } else {
+        const rowH = 24;
+        const startY = y + (h - recent.length * rowH) / 2 + rowH / 2;
+        recent.forEach((entry, idx) => {
+          const ry = startY + idx * rowH;
+          const isLatest = idx === recent.length - 1;
+          ctx.fillStyle = isLatest ? INK2 : INK_SOFT;
+          ctx.font = `${isLatest ? "800" : "600"} 15px ${FONT_FAMILY2}`;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "middle";
+          ctx.fillText(entry.label, x + 266, ry);
+          ctx.fillStyle = entry.color;
+          ctx.font = `900 ${isLatest ? 17 : 15}px ${FONT_FAMILY2}`;
+          ctx.textAlign = "right";
+          ctx.fillText(entry.deltaText, x + w - 18, ry);
+        });
       }
       ctx.restore();
     }
@@ -3546,23 +4163,36 @@
       drawRoundedRect(ctx, x, y, w, h, 28);
       ctx.fill();
       ctx.stroke();
+      const isOpening = this.run.phase === "opening_reward";
       const clearedBoss = getBossProfile(this.run.stageIndex);
-      const nextBoss = getBossProfile(this.run.stageIndex + 1);
+      const nextBoss = getBossProfile(isOpening ? 0 : this.run.stageIndex + 1);
       ctx.fillStyle = "#d97706";
       ctx.font = `900 30px ${FONT_FAMILY2}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(`\u{1F389} \u51FB\u8D25 ${clearedBoss.name}\uFF01`, VIRTUAL_W / 2, y + 58);
+      this.drawCenteredIconText(
+        ctx,
+        isOpening ? "gift" : "trophy",
+        isOpening ? "\u732B\u795E\u8D77\u624B\u793C \xB7 \u5F00\u5C40 3 \u9009 1" : `\u51FB\u8D25 ${clearedBoss.name}\uFF01`,
+        VIRTUAL_W / 2,
+        y + 47,
+        38,
+        8
+      );
       ctx.fillStyle = INK_SOFT;
       ctx.font = `700 18px ${FONT_FAMILY2}`;
       ctx.fillText(
-        `\u5DF2\u56DE\u590D +${STAGE_CLEAR_HEAL} HP\uFF08\u5F53\u524D ${this.run.playerHp}/${this.run.playerMaxHp}\uFF09 \xB7 \u9009\u62E9 1 \u4E2A\u6D41\u6D3E\u795D\u798F`,
+        isOpening ? "\u5148\u9009 1 \u4E2A\u521D\u59CB\u6D41\u6D3E\u795D\u798F\uFF0C\u5E26\u7740\u4E13\u5C5E\u673A\u5236\u5F00\u542F 3 \u5173\u8089\u9E3D\u95EF\u5173\uFF01" : `\u5DF2\u56DE\u590D +${STAGE_CLEAR_HEAL} HP\uFF08\u5F53\u524D ${this.run.playerHp}/${this.run.playerMaxHp}\uFF09 \xB7 \u9009\u62E9 1 \u4E2A\u6D41\u6D3E\u795D\u798F`,
         VIRTUAL_W / 2,
         y + 96
       );
       ctx.fillStyle = "#b45309";
       ctx.font = `700 16px ${FONT_FAMILY2}`;
-      ctx.fillText(`\u4E0B\u4E00\u5173\u9884\u544A\uFF1A\u7B2C ${nextBoss.stage} \u5173 ${nextBoss.name}\uFF08${nextBoss.traitShort}\uFF09`, VIRTUAL_W / 2, y + 128);
+      ctx.fillText(
+        `${isOpening ? "\u7B2C 1 \u5173\u9884\u544A" : "\u4E0B\u4E00\u5173\u9884\u544A"}\uFF1A\u7B2C ${nextBoss.stage} \u5173 ${nextBoss.name}\uFF08${nextBoss.traitShort}\uFF09`,
+        VIRTUAL_W / 2,
+        y + 128
+      );
       const cardW = 596;
       const cardH = 192;
       const cardX = x + (w - cardW) / 2;
@@ -3624,7 +4254,7 @@
         ctx.fillStyle = def.badgeColor;
         ctx.font = `800 16px ${FONT_FAMILY2}`;
         ctx.textAlign = "right";
-        ctx.fillText("\u70B9\u51FB\u9009\u62E9\u6B64\u795D\u798F \u25B6", cardX + cardW - 22, cy + cardH - 20);
+        ctx.fillText("\u70B9\u51FB\u9009\u62E9\u6B64\u795D\u798F", cardX + cardW - 22, cy + cardH - 20);
         ctx.restore();
       });
     }
@@ -3714,7 +4344,15 @@
       ctx.font = `900 32px ${FONT_FAMILY2}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(isWin ? "\u{1F3C6} \u732B\u5C4B\u5927\u6377 \xB7 \u5168\u901A\u5173\uFF01" : "\u{1F43E} \u88AB\u732B\u732B\u6320\u8DB4\u5566", VIRTUAL_W / 2, y + 214);
+      this.drawCenteredIconText(
+        ctx,
+        isWin ? "trophy" : "paw",
+        isWin ? "\u732B\u5C4B\u5927\u6377 \xB7 \u5168\u901A\u5173\uFF01" : "\u88AB\u732B\u732B\u6320\u8DB4\u5566",
+        VIRTUAL_W / 2,
+        y + 202,
+        40,
+        8
+      );
       ctx.fillStyle = INK_SOFT;
       ctx.font = `700 18px ${FONT_FAMILY2}`;
       ctx.fillText(
@@ -3745,7 +4383,7 @@
         y: y + h - 92,
         w: 240,
         h: 56,
-        label: isWin ? "\u518D\u6765\u4E00\u5C40 \u25B6" : "\u91CD\u65B0\u6311\u6218 \u25B6",
+        label: isWin ? "\u518D\u6765\u4E00\u5C40" : "\u91CD\u65B0\u6311\u6218",
         accent: true,
         onClick: () => this.startNewRoguelikeRun(
           Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999)
@@ -3781,10 +4419,10 @@
         "\u2022 \u7EA2\u865A\u7EBF\u6846\u6807\u51FA Boss \u4E0B\u56DE\u5408\u51C6\u5907\u52A8\u54EA\u4E24\u53EA\u732B\uFF0C\u53EF\u62A2\u5148\u62C6\u62DB\uFF01",
         "\u2022 \u5927\u6A58\uFF1A\u4E13\u62A2\u6A58\u732B\u5E76\u5E72\u996D\u56DE\u8840 \uFF5C \u5976\u725B\u732B\uFF1A\u6BCF2\u56DE\u5408\u8DD1\u9177\u53D8\u5927\u732B",
         "\u2022 \u54C8\u57FA\u7C73\uFF1A\u6BCF2\u56DE\u5408\u54C8\u6C14\u53E0 8 \u76FE + \u9020\u5927\u732B\uFF0C\u9AD8\u4F24\u62A2\u7206\uFF01",
-        "\u2022 \u51FB\u8D25 Boss \u56DE\u590D +25 \u8840\uFF0C\u5E76\u5728\u4E09\u5927\u6D41\u6D3E\u4E2D 3 \u9009 1 \u795D\u798F\u3002",
+        "\u2022 \u5F00\u5C40\u5148\u9009 1 \u4E2A\u521D\u59CB\u795D\u798F\uFF1B\u51FB\u8D25 Boss \u56DE +25 \u8840\u5E76\u518D 3 \u9009 1\u3002",
         "",
-        "\u3010\u64CD\u4F5C\u4E0E\u5FAE\u52A8\u63D0\u793A\u3011",
-        "\u2022 \u8F7B\u5FAE\u6643\u52A8\u7684\u732B = \u9AD8\u4EF7\u503C\u53EF\u5F15\u7206/\u591A\u8FDE\u63D0\u793A\uFF0C\u62D6\u52A8\u6216\u70B9\u9009\u5373\u53EF\u6362\u3002",
+        "\u3010\u64CD\u4F5C\u4E0E\u89C6\u89C9\u6307\u793A\u3011",
+        "\u2022 \u62D6\u52A8\u6216\u70B9\u9009\u76F8\u90BB\u732B\u4EA4\u6362\uFF1B\u83B7\u5F97\u300C\u732B\u987B\u96F7\u8FBE\u300D\u540E\u53EF\u5408\u6210\u732B\u4F1A\u6325\u722A\u63D0\u793A\u3002",
         "\u2022 \u7EFF\u865A\u73AF = \u5408\u6210\u4E2D\u5FC3 \uFF5C \u6A59/\u7C89\u5708 = \u9010\u6CE2\u7206\u53D1 \uFF5C \u9752\u7BAD = \u6536\u7F29\u3002"
       ];
       ctx.fillStyle = INK_SOFT;

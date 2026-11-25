@@ -24,6 +24,7 @@ export type RelicId =
   | 'paw_shield'
   | 'double_kibble'
   | 'calm_defuse'
+  | 'whisker_radar'
   | 'gravity_vortex'
   | 'catnip_combo'
   | 'combo_heal';
@@ -96,7 +97,7 @@ export interface RoguelikeRun {
   bossTurnsTaken: number;
   relics: RelicId[];
   calmDefuseActive: boolean;
-  phase: 'battle' | 'reward' | 'victory' | 'defeat';
+  phase: 'opening_reward' | 'battle' | 'reward' | 'victory' | 'defeat';
   rewardChoices: RelicId[];
   totalTurns: number;
   bestTurnDamage: number;
@@ -201,6 +202,15 @@ export const RELICS: readonly RelicDef[] = [
     detailDesc: '本回合只要合成出大猫或炫彩猫，下个 Boss 回合你受到的伤害减免 30%。',
     badgeColor: '#eab308',
   },
+  {
+    id: 'whisker_radar',
+    branch: 'merge',
+    branchLabel: '合成流',
+    name: '猫须雷达',
+    shortDesc: '可合成/引爆猫咪挥爪提示',
+    detailDesc: '感知棋盘动态：可引爆大猫或可合成的猫咪会朝搭档挥爪招手提示交换。',
+    badgeColor: '#f59e0b',
+  },
   // 🌀 收缩流
   {
     id: 'gravity_vortex',
@@ -251,8 +261,8 @@ export function createRoguelikeRun(seed: number): RoguelikeRun {
     bossTurnsTaken: 0,
     relics: [],
     calmDefuseActive: false,
-    phase: 'battle',
-    rewardChoices: [],
+    phase: 'opening_reward',
+    rewardChoices: rollRelicChoices([], seed + 313),
     totalTurns: 0,
     bestTurnDamage: 0,
     defeatedBosses: [],
@@ -269,6 +279,11 @@ export function createStageGameState(run: RoguelikeRun): GameState {
   st.shield = [run.playerShield, run.bossShield];
   st.player = 0;
   return st;
+}
+
+/** 是否持有「猫须雷达」祝福（解锁可合成/引爆猫咪挥爪提示） */
+export function hasHintRelic(relics: readonly RelicId[]): boolean {
+  return relics.includes('whisker_radar');
 }
 
 /** 汇总玩家已拥有祝福对应的规则修饰器 */
@@ -316,10 +331,10 @@ export function computeBossIntent(
       ? '被动：消橘猫回血'
       : boss.id === 'cow'
         ? skillReady
-          ? '⚡ 本回合跑酷：变 1 只大猫'
+          ? '本回合跑酷：变 1 只大猫'
           : '跑酷充能中（下回合发癫）'
         : skillReady
-          ? '👑 本回合哈气：+8 盾 + 造 1 大猫'
+          ? '本回合哈气：+8 盾 + 造 1 大猫'
           : '猫王蓄力中（下回合哈气）';
 
   if (swaps.length === 0) {
@@ -479,11 +494,11 @@ export function applyBossPreTurnSkill(
   const banner =
     boss.id === 'cow'
       ? upgradedCell >= 0
-        ? '⚡ 奶牛猫午夜跑酷！把 1 只小猫吓成了 2 级大猫！'
-        : '⚡ 奶牛猫午夜跑酷扑了个空！'
+        ? '奶牛猫午夜跑酷！把 1 只小猫吓成了 2 级大猫！'
+        : '奶牛猫午夜跑酷扑了个空！'
       : upgradedCell >= 0
-        ? `👑 哈基米猫王哈气！获得 +${shieldGained} 护盾并催生 1 只大猫！`
-        : `👑 哈基米猫王哈气！获得 +${shieldGained} 护盾！`;
+        ? `哈基米猫王哈气！获得 +${shieldGained} 护盾并催生 1 只大猫！`
+        : `哈基米猫王哈气！获得 +${shieldGained} 护盾！`;
 
   return {
     triggered: true,

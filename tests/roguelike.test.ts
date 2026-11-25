@@ -12,6 +12,7 @@ import {
   createRoguelikeRun,
   createStageGameState,
   getBossProfile,
+  hasHintRelic,
   RELICS,
   rollRelicChoices,
 } from '../src/roguelike';
@@ -24,9 +25,9 @@ function runRoguelikeTests() {
     assertions += 1;
   };
 
-  // 1. 3 位猫梗 Boss 与 9 大流派祝福基础校验
+  // 1. 3 位猫梗 Boss 与 10 大流派祝福基础校验
   check(BOSSES.length === 3, 'Should define exactly 3 cat-meme bosses');
-  check(RELICS.length === 9, 'Should define 9 mechanism relics across 3 branches');
+  check(RELICS.length === 10, 'Should define 10 mechanism relics across 3 branches');
   const branches = new Set(RELICS.map((r) => r.branch));
   check(branches.size === 3, 'Should cover 3 distinct branches (blast/merge/collapse)');
 
@@ -170,13 +171,26 @@ function runRoguelikeTests() {
   check(hakimiSkill.triggered && hakimiSkill.shieldGained === 8, 'Hakimi must gain +8 shield on skill turn');
   check(hakimiState.shield?.[1] === 8, 'Hakimi shield state must reflect +8');
 
-  // 7. 分层微动提示验证
+  // 7. 猫须雷达道具与提示引擎验证
+  check(!hasHintRelic([]), 'Hint animations must be disabled by default without whisker_radar');
+  check(!hasHintRelic(['paw_shield', 'chain_detonator']), 'Unrelated relics must not enable hints');
+  check(hasHintRelic(['whisker_radar']), 'whisker_radar relic must enable merge/blast hints');
+  const radarRoll = rollRelicChoices(['paw_shield', 'double_kibble', 'calm_defuse'], 2028);
+  check(
+    radarRoll.includes('whisker_radar'),
+    'whisker_radar must be rollable from the merge branch pool'
+  );
   const hints = computeHintSwaps(orangeState);
   check(hints.fallback !== null, 'Hint engine must always provide fallback swap when board is playable');
   check(hints.highValue.length <= 2, 'High-value hints must be capped at 2 to prevent visual noise');
 
-  // 8. 端到端模拟一场完整 3 关肉鸽闯关（含 3 选 1 祝福与 Boss 意图/技能交替）
+  // 8. 端到端模拟一场完整 3 关肉鸽闯关（含开局起手 3 选 1 + 过关 3 选 1 与 Boss 意图/技能交替）
   const simRun = createRoguelikeRun(202601);
+  check(simRun.phase === 'opening_reward', 'New roguelike run must start in opening_reward phase');
+  check(simRun.rewardChoices.length === 3, 'Opening gift must offer 3 starter relic choices');
+  simRun.relics.push(simRun.rewardChoices[0]);
+  simRun.rewardChoices = [];
+  simRun.phase = 'battle';
   for (let stage = 0; stage < BOSSES.length; stage++) {
     simRun.stageIndex = stage;
     simRun.bossShield = 0;

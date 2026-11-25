@@ -12,10 +12,24 @@
   }
   function loadGameAssets() {
     return {
+      icons: {
+        sound_on: loadImage("assets/ui/icon_sound_on.png"),
+        sound_off: loadImage("assets/ui/icon_sound_off.png"),
+        shield: loadImage("assets/ui/icon_shield.png"),
+        blast: loadImage("assets/ui/icon_blast.png"),
+        sparkle: loadImage("assets/ui/icon_sparkle.png"),
+        gift: loadImage("assets/ui/icon_gift.png"),
+        trophy: loadImage("assets/ui/icon_trophy.png"),
+        paw: loadImage("assets/ui/icon_paw.png"),
+        rice: loadImage("assets/ui/icon_rice.png"),
+        target: loadImage("assets/ui/icon_target.png"),
+        bolt: loadImage("assets/ui/icon_bolt.png"),
+        crown: loadImage("assets/ui/icon_crown.png")
+      },
       bg: loadImage("assets/bg_catroom.jpg"),
       avatarP1: loadImage("assets/ui/avatar_p1.png"),
       avatarP2: loadImage("assets/ui/avatar_p2.png"),
-      cats: [0, 1, 2, 3].map((color) => ({
+      cats: [0, 1, 2, 3, 4].map((color) => ({
         lv1: loadImage(`assets/cats/cat_${color}_lv1.png`),
         lv2: loadImage(`assets/cats/cat_${color}_lv2.png`),
         animLv1: loadImage(`assets/cats/anim_cat_${color}_lv1.png`),
@@ -35,12 +49,15 @@
   }
 
   // src/catRender.ts
-  var CAT_PALETTE = ["#ffb870", "#a9a6f8", "#8cd9b3", "#f9a9be"];
+  var CAT_PALETTE = ["#ffb870", "#96b2cc", "#524952", "#fffaf0", "#efe0c8"];
   var ANIM_FRAME_SIZE = 192;
   var ANIM_FRAME_COUNT = 10;
   var INK = "#4e342e";
   var FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif';
   function pickCatAnimFrame(animState, elapsed, seedOffset = 0, grabElapsed = 0) {
+    if (animState === "static") {
+      return 0;
+    }
     if (animState === "grabbed") {
       if (grabElapsed < 0.14) return 7;
       const step = Math.floor((grabElapsed - 0.14) / 0.105);
@@ -95,13 +112,14 @@
       alpha = 1,
       elapsed = 0,
       showBadge = true,
-      animState = "idle",
+      animState = "static",
       seedOffset = 0,
       grabElapsed = 0,
       flipX = false,
       forceFrame
     } = opts;
-    const idx = (colorId % 4 + 4) % 4;
+    const n = CAT_PALETTE.length;
+    const idx = (colorId % n + n) % n;
     const isGrabbed = animState === "grabbed";
     ctx.save();
     ctx.translate(x, y);
@@ -301,7 +319,7 @@
   // src/rules.ts
   var SIZE = 7;
   var CELL_COUNT = SIZE * SIZE;
-  var COLORS = 4;
+  var COLORS = 5;
   var HP = 100;
   var AXES = [
     [0, 1],
@@ -480,7 +498,7 @@
     for (let attempt = 0; attempt < 500; attempt++) {
       state.board = new Array(CELL_COUNT).fill(null);
       for (let i = 0; i < CELL_COUNT; i++) {
-        const colors = [0, 1, 2, 3];
+        const colors = Array.from({ length: COLORS }, (_, k) => k);
         while (colors.length > 0) {
           const pick = rng.randiRange(0, colors.length - 1);
           state.board[i] = { id: 0, color: colors[pick], level: 1 };
@@ -1975,7 +1993,7 @@
         this.drawHex(ctx, p.x, p.y, HEX_RADIUS);
         ctx.fillStyle = "#fff9f0";
         ctx.fill();
-        ctx.strokeStyle = i === this.selected ? "#d97706" : i === this.hoverCell ? "#8c5a3c" : (cat == null ? void 0 : cat.level) === 2 ? "#e8a923" : cat ? CAT_PALETTE[cat.color % 4] : "#d8c2a8";
+        ctx.strokeStyle = i === this.selected ? "#d97706" : i === this.hoverCell ? "#8c5a3c" : (cat == null ? void 0 : cat.level) === 2 ? "#e8a923" : cat ? CAT_PALETTE[cat.color % CAT_PALETTE.length] : "#d8c2a8";
         ctx.lineWidth = i === this.selected ? 5 : 3;
         ctx.stroke();
         if (this.activeBeamCells.has(i)) {

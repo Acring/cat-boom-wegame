@@ -2,7 +2,7 @@ import { SeededRng } from './rng';
 
 export const SIZE = 7;
 export const CELL_COUNT = SIZE * SIZE;
-export const COLORS = 4;
+export const COLORS = 5;
 export const HP = 100;
 export const AXES: ReadonlyArray<readonly [number, number]> = [
   [0, 1], // 竖
@@ -300,7 +300,7 @@ function generate(state: GameState, rng: SeededRng): void {
   for (let attempt = 0; attempt < 500; attempt++) {
     state.board = new Array<CatData | null>(CELL_COUNT).fill(null);
     for (let i = 0; i < CELL_COUNT; i++) {
-      const colors = [0, 1, 2, 3];
+      const colors = Array.from({ length: COLORS }, (_, k) => k);
       while (colors.length > 0) {
         const pick = rng.randiRange(0, colors.length - 1);
         state.board[i] = { id: 0, color: colors[pick], level: 1 };

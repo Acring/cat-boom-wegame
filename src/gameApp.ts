@@ -1,4 +1,5 @@
-import { GameAssets, loadGameAssets } from './assets';
+import { GameAssets, loadGameAssets, type UiIconKey } from './assets';
+import { SoundEngine } from './audio';
 import { CatAnimState, drawCatSprite } from './catRender';
 import { FIXTURE_NAMES, loadFixture } from './fixtures';
 import type { Platform } from './platform';
@@ -16,6 +17,7 @@ import {
   createStageGameState,
   getBossProfile,
   getRelicDef,
+  hasHintRelic,
   HintSet,
   RelicId,
   RoguelikeRun,
@@ -53,9 +55,10 @@ const FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetic
 // 阳光猫屋手绘贴纸配色表
 const INK = '#4e342e';
 const INK_SOFT = '#7a584c';
-const NEST_RIM_COLORS = ['#ffd8ad', '#ddd3fc', '#ccecd4', '#ffd0de'] as const;
+const NEST_RIM_COLORS = ['#ffd8ad', '#cde2f5', '#f6e2a1', '#ffd3df', '#cdebd7'] as const;
 const NEST_EMPTY_RIM = '#f4e2c8';
 const NEST_BIG_RIM = '#ffea9c';
+const WAVE_COLORS = ['#ff9852', '#ff4d8d', '#a855f7', '#ec4899'] as const;
 
 interface ButtonRect {
   id: string;
@@ -64,6 +67,7 @@ interface ButtonRect {
   w: number;
   h: number;
   label: string;
+  icon?: UiIconKey;
   disabled?: boolean;
   accent?: boolean;
   round?: boolean;
@@ -100,6 +104,44 @@ interface FloatingDamage {
   color: string;
   life: number;
   maxLife: number;
+}
+
+interface AmbientCatAnim {
+  catId: number;
+  frame: 1 | 2; // 1=轻甩尾, 2=轻眨眼
+  elapsed: number;
+  duration: number;
+}
+
+interface ShockwaveRing {
+  x: number;
+  y: number;
+  color: string;
+  radius: number;
+  maxRadius: number;
+  life: number;
+  maxLife: number;
+}
+
+interface ComboLogEntry {
+  label: string;
+  deltaText: string;
+  color: string;
+}
+
+interface ComboTracker {
+  active: boolean;
+  actorLabel: string;
+  isPlayer: boolean;
+  totalDamage: number;
+  rounds: number;
+  blastWaves: number;
+  trueDamage: number;
+  shieldBlocked: number;
+  pulse: number;
+  holdLife: number;
+  maxHold: number;
+  logs: ComboLogEntry[];
 }
 
 interface ActiveTween {
@@ -226,6 +268,7 @@ function drawCuteStar(
 export class CatBoomApp {
   private readonly platform: Platform;
   private readonly assets: GameAssets;
+  private readonly sound = new SoundEngine();
   private scale = 1;
   private offsetX = 0;
   private offsetY = 0;
@@ -240,7 +283,10 @@ export class CatBoomApp {
   private previewTarget = -1;
   private preview: PreviewResult = { valid: false };
   private currentEvent: RoundEvent | null = null;
+  private activeEventPhase: 'none' | 'match' | 'merge' | 'wave' | 'collapse' = 'none';
+  private activeWaveIndex = -1;
   private statusText = '';
+  private statusIcon: UiIconKey | null = null;
 
   // 触控拖动与按住拎起猫咪状态
   private dragStartCell = -1;
@@ -261,7 +307,6 @@ export class CatBoomApp {
   private bossIntent: BossIntent | null = null;
   private bossHighlightSwap: [number, number] | null = null;
   private hintSet: HintSet = { highValue: [], fallback: null };
-  private idleSeconds = 0;
 
   // 控制选项
   private busy = false;
@@ -275,12 +320,18 @@ export class CatBoomApp {
 
   // 渲染实体与动画
   private visuals = new Map<number, CatVisual>();
+  private ambientAnims: AmbientCatAnim[] = [];
+  private ambientSpawnTimer = 1.4;
+  private lastAmbientCatId = -1;
   private ghosts: GhostParticle[] = [];
+  private shockwaves: ShockwaveRing[] = [];
   private floatings: FloatingDamage[] = [];
+  private comboTracker: ComboTracker | null = null;
   private tweens: ActiveTween[] = [];
   private shakeOffsetX = 0;
   private shakeOffsetY = 0;
   private bannerText = '';
+  private bannerIcon: UiIconKey | null = null;
   private bannerLife = 0;
   private bannerMaxLife = 1.6;
   private elapsed = 0;
@@ -312,7 +363,7 @@ export class CatBoomApp {
 
   private computeViewport(): void {
     const availW = this.platform.width;
-    const availH = Math.max(240, this.platform.height - this.platform.topInset);
+    const availH = Math.max(240, this.platform.height - this.platform.topInset - this.platform.bottomInset);
     this.scale = Math.min(availW / VIRTUAL_W, availH / VIRTUAL_H);
     this.offsetX = (availW - VIRTUAL_W * this.scale) / 2;
     this.offsetY = this.platform.topInset + (availH - VIRTUAL_H * this.scale) / 2;
@@ -333,6 +384,10 @@ export class CatBoomApp {
     };
   }
 
+  private getGrabLiftY(): number {
+    return this.platform.isTouch ? 48 : 28;
+  }
+
   private hitCell(vx: number, vy: number): number {
     let best = -1;
     let bestDist = 55;
@@ -347,7 +402,13 @@ export class CatBoomApp {
     return best;
   }
 
-  private showBanner(text: string, duration = 1.6): void {
+  private setStatus(text: string, icon: UiIconKey | null = null): void {
+    this.statusText = text;
+    this.statusIcon = icon;
+  }
+
+  private showBanner(text: string, duration = 1.6, icon: UiIconKey | null = null): void {
+    this.bannerIcon = icon;
     this.bannerText = text;
     this.bannerMaxLife = duration;
     this.bannerLife = duration;
@@ -372,8 +433,13 @@ export class CatBoomApp {
     this.gameMode = 'roguelike';
     this.showDebugPanel = false;
     this.showRelicsModal = false;
+    this.comboTracker = null;
     this.run = createRoguelikeRun(seed);
-    this.startCurrentStage();
+    // 先加载第 1 关棋盘作为开局起手 3 选 1 弹窗后的暖系背景
+    const openingState = createStageGameState(this.run);
+    this.loadState(openingState);
+    this.bossIntent = null;
+    this.setStatus('猫神起手礼：先选 1 个初始流派祝福开启闯关！', 'gift');
   }
 
   private startCurrentStage(): void {
@@ -382,6 +448,7 @@ export class CatBoomApp {
     this.run.calmDefuseActive = false;
     this.run.phase = 'battle';
     this.bossHighlightSwap = null;
+    this.comboTracker = null;
     const stageState = createStageGameState(this.run);
     this.loadState(stageState);
     const boss = getBossProfile(this.run.stageIndex);
@@ -390,21 +457,32 @@ export class CatBoomApp {
   }
 
   private chooseRewardRelic(id: RelicId): void {
-    if (this.gameMode !== 'roguelike' || this.run.phase !== 'reward') return;
+    if (
+      this.gameMode !== 'roguelike' ||
+      (this.run.phase !== 'opening_reward' && this.run.phase !== 'reward')
+    ) {
+      return;
+    }
+    const isOpening = this.run.phase === 'opening_reward';
     this.run.relics.push(id);
     this.run.rewardChoices = [];
-    this.run.stageIndex += 1;
+    if (!isOpening) {
+      this.run.stageIndex += 1;
+    }
+    this.sound.playChime();
     this.startCurrentStage();
   }
 
   private refreshPlayerTurnGuides(): void {
-    this.idleSeconds = 0;
-    this.hintSet = computeHintSwaps(this.state, this.getCurrentModifiers(0));
+    const canShowHints = this.gameMode === 'roguelike' && hasHintRelic(this.run.relics);
+    this.hintSet = canShowHints
+      ? computeHintSwaps(this.state, this.getCurrentModifiers(0))
+      : { highValue: [], fallback: null };
     if (this.gameMode === 'roguelike' && this.run.phase === 'battle' && this.state.winner < 0) {
       const boss = getBossProfile(this.run.stageIndex);
       const mult = this.run.calmDefuseActive ? 0.7 : 1;
       this.bossIntent = computeBossIntent(this.state, boss, this.run.bossTurnsTaken, mult);
-      this.statusText = `${boss.name}意图：${this.bossIntent.headline}`;
+      this.setStatus(`${boss.name}意图：${this.bossIntent.headline}`);
     } else {
       this.bossIntent = null;
     }
@@ -431,12 +509,19 @@ export class CatBoomApp {
     this.previewTarget = -1;
     this.preview = { valid: false };
     this.currentEvent = null;
+    this.activeEventPhase = 'none';
+    this.activeWaveIndex = -1;
+    this.shockwaves = [];
+    this.comboTracker = null;
     this.legalCount = findLegalSwaps(this.state).length;
+    this.ambientAnims = [];
+    this.ambientSpawnTimer = 1.4;
     this.syncVisuals(this.state.board);
-    this.statusText =
+    this.setStatus(
       this.state.fixture !== undefined
         ? `实验：${FIXTURE_NAMES[this.state.fixture]} · 按金色箭头交换`
-        : '点击或拖动相邻猫猫交换位置';
+        : '点击或拖动相邻猫猫交换位置'
+    );
   }
 
   private restartSame(): void {
@@ -453,9 +538,15 @@ export class CatBoomApp {
     this.previewTarget = -1;
     this.preview = { valid: false };
     this.currentEvent = null;
+    this.activeEventPhase = 'none';
+    this.activeWaveIndex = -1;
+    this.shockwaves = [];
+    this.comboTracker = null;
     this.legalCount = findLegalSwaps(this.state).length;
+    this.ambientAnims = [];
+    this.ambientSpawnTimer = 1.4;
     this.syncVisuals(this.state.board);
-    this.statusText = `已恢复第 ${this.state.turn} 回合开始状态`;
+    this.setStatus(`已恢复第 ${this.state.turn} 回合开始状态`);
     this.showDebugPanel = false;
   }
 
@@ -479,6 +570,7 @@ export class CatBoomApp {
 
   private bindInputs(): void {
     this.platform.onPointerDown((sx, sy) => {
+      this.sound.unlock();
       const { x, y } = this.toVirtual(sx, sy);
 
       for (let i = this.buttons.length - 1; i >= 0; i--) {
@@ -509,7 +601,6 @@ export class CatBoomApp {
 
       if (this.isInputBlocked()) return;
 
-      this.idleSeconds = 0;
       const cell = this.hitCell(x, y);
       this.dragStartCell = cell;
       this.isDragging = false;
@@ -519,11 +610,12 @@ export class CatBoomApp {
         this.grabbedCell = cell;
         this.grabbedCatId = cat.id;
         this.grabPointerX = p.x;
-        this.grabPointerY = p.y - 20;
+        this.grabPointerY = p.y - this.getGrabLiftY();
         this.grabSmoothX = p.x;
-        this.grabSmoothY = p.y - 6;
+        this.grabSmoothY = p.y - Math.round(this.getGrabLiftY() * 0.35);
         this.grabTilt = 0;
         this.grabElapsed = 0;
+        this.sound.playGrab();
         this.platform.vibrate('light');
       }
     });
@@ -538,11 +630,10 @@ export class CatBoomApp {
       const { x, y } = this.toVirtual(sx, sy);
       if (this.grabbedCell >= 0) {
         this.grabPointerX = x;
-        this.grabPointerY = y - 18;
+        this.grabPointerY = y - this.getGrabLiftY();
       }
       const cell = this.hitCell(x, y);
       if (cell >= 0 && cell !== this.dragStartCell) {
-        this.idleSeconds = 0;
         this.isDragging = true;
         this.selected = this.dragStartCell;
         if (neighbors(this.selected).includes(cell)) {
@@ -617,7 +708,7 @@ export class CatBoomApp {
       }
 
       if (!validSwap(this.state, this.selected, upCell)) {
-        this.statusText = '这次交换没有形成同色直线三连，换一只试试~';
+        this.setStatus('这次交换没有形成同色直线三连，换一只试试~');
         this.clearPreview();
         return;
       }
@@ -625,7 +716,7 @@ export class CatBoomApp {
       this.setPreview(this.selected, upCell);
       this.hoverPreviewed = false;
       const dmg = this.preview.event?.damage ?? 0;
-      this.statusText = `首轮预计 ${dmg} 伤害 · 再点一次确认交换`;
+      this.setStatus(`首轮预计 ${dmg} 伤害 · 再点一次确认交换`);
     });
 
     this.platform.onPointerHover((sx, sy) => {
@@ -732,8 +823,27 @@ export class CatBoomApp {
     });
   }
 
-  private spawnWaveBurstEffects(event: RoundEvent, cells: number[], waveIndex: number): void {
+  private spawnWaveBurstEffects(
+    event: RoundEvent,
+    sources: number[],
+    cells: number[],
+    waveIndex: number
+  ): void {
     if (cells.length === 0) return;
+    const waveColor = WAVE_COLORS[Math.min(waveIndex, WAVE_COLORS.length - 1)];
+    const ringLife = 0.42 / this.speed;
+    for (const src of sources) {
+      const p = this.cellPoint(src);
+      this.shockwaves.push({
+        x: p.x,
+        y: p.y,
+        color: waveColor,
+        radius: 28,
+        maxRadius: 155 + Math.min(waveIndex, 3) * 28,
+        life: ringLife,
+        maxLife: ringLife,
+      });
+    }
     const count = Math.min(cells.length * 2, 24);
     for (let k = 0; k < count; k++) {
       const cell = cells[k % cells.length];
@@ -796,10 +906,25 @@ export class CatBoomApp {
     this.spawnFloatingText(text, y, event.trueDamage > 0 ? '#9333ea' : '#e54d42');
   }
 
+  private pushComboLog(delta: number, label: string, color: string, deltaText?: string): void {
+    if (!this.comboTracker) return;
+    this.comboTracker.totalDamage = Math.max(0, this.comboTracker.totalDamage + delta);
+    this.comboTracker.pulse = 1;
+    this.comboTracker.logs.push({
+      label,
+      deltaText: deltaText ?? (delta >= 0 ? `+${delta}` : `${delta}`),
+      color,
+    });
+    if (this.comboTracker.logs.length > 6) {
+      this.comboTracker.logs.shift();
+    }
+  }
+
   private async submitSwap(a: number, b: number, isBossAction = false): Promise<void> {
     if (this.busy && !isBossAction) return;
     if (!validSwap(this.state, a, b)) {
-      this.statusText = '这次交换没有形成同色直线三连，换一只试试~';
+      this.sound.playInvalid();
+      this.setStatus('这次交换没有形成同色直线三连，换一只试试~');
       this.selected = -1;
       this.clearPreview();
       return;
@@ -819,7 +944,29 @@ export class CatBoomApp {
     this.hoverPreviewed = false;
     this.bossHighlightSwap = null;
 
-    await this.animateBoardPositions(result.swapped, 0.2);
+    const actorLabel =
+      this.gameMode === 'roguelike'
+        ? attacker === 0
+          ? '你'
+          : getBossProfile(this.run.stageIndex).name
+        : `玩家 ${attacker + 1}`;
+    this.comboTracker = {
+      active: true,
+      actorLabel,
+      isPlayer: attacker === 0,
+      totalDamage: 0,
+      rounds: 0,
+      blastWaves: 0,
+      trueDamage: 0,
+      shieldBlocked: 0,
+      pulse: 0,
+      holdLife: 1.5,
+      maxHold: 1.5,
+      logs: [],
+    };
+
+    this.sound.playSwap();
+    await this.animateBoardPositions(result.swapped, 0.22);
 
     let turnTotalDamage = 0;
 
@@ -827,14 +974,15 @@ export class CatBoomApp {
       const event = result.events[idx];
       turnTotalDamage += event.damage;
       this.currentEvent = event;
-      const actorLabel =
-        this.gameMode === 'roguelike'
-          ? attacker === 0
-            ? '你'
-            : getBossProfile(this.run.stageIndex).name
-          : `玩家 ${attacker + 1}`;
-      this.statusText = `${actorLabel} · 第 ${event.number} 轮 · 基础 ${event.baseDamage} + 附加 ${event.bonus} = ${event.damage} 伤`;
-      await this.waitSec(0.24);
+      this.activeEventPhase = 'match';
+      this.activeWaveIndex = -1;
+      this.comboTracker.rounds = event.number;
+      this.setStatus(`${actorLabel} · 第 ${event.number} 轮 · 基础 ${event.baseDamage} + 附加 ${event.bonus} = ${event.damage} 伤`);
+      if (idx > 0) {
+        this.sound.playCombo(event.number);
+        this.showBanner(`第 ${event.number} 轮连锁！`, 0.78, 'sparkle');
+      }
+      await this.waitSec(idx > 0 ? 0.36 : 0.28);
 
       const mergeItems: Array<{ vis: CatVisual; sx: number; sy: number; tx: number; ty: number }> = [];
       for (const center of event.centers) {
@@ -849,7 +997,10 @@ export class CatBoomApp {
         }
       }
       if (mergeItems.length > 0) {
-        await this.runTween(0.22, 'cubicInOut', (t) => {
+        this.activeEventPhase = 'merge';
+        const hasRainbowCenter = event.centers.some((c) => c.resultLevel === 3);
+        this.sound.playMerge(hasRainbowCenter ? 3 : 2);
+        await this.runTween(0.26, 'cubicInOut', (t) => {
           for (const m of mergeItems) {
             m.vis.x = m.sx + (m.tx - m.sx) * t;
             m.vis.y = m.sy + (m.ty - m.sy) * t;
@@ -858,32 +1009,86 @@ export class CatBoomApp {
         });
       }
 
+      let waveShownDamage = 0;
       if (event.waves.length > 0) {
-        for (const wave of event.waves) {
+        this.activeEventPhase = 'wave';
+        for (let w = 0; w < event.waves.length; w++) {
+          const wave = event.waves[w];
+          this.activeWaveIndex = w;
+          const pulseTargets = wave.sources
+            .map((c) => event.before[c])
+            .filter((c): c is CatData => Boolean(c))
+            .map((c) => this.visuals.get(c.id))
+            .filter((v): v is CatVisual => Boolean(v));
+
           if (wave.wave > 0) {
-            this.statusText = `${actorLabel} · 第 ${event.number} 轮 · 第 ${wave.wave} 波连锁二次引爆！`;
-            const pulseTargets = wave.sources
-              .map((c) => event.before[c])
-              .filter((c): c is CatData => Boolean(c))
-              .map((c) => this.visuals.get(c.id))
-              .filter((v): v is CatVisual => Boolean(v));
-            if (pulseTargets.length > 0) {
-              await this.runTween(0.14, 'backOut', (t) => {
-                for (const v of pulseTargets) v.scale = 1 + 0.35 * t;
-              });
-            }
+            this.setStatus(`${actorLabel} · 第 ${event.number} 轮 · 第 ${wave.wave} 波连锁二次引爆！`);
+            this.showBanner(`${wave.wave + 1} 连爆！`, 0.65, 'blast');
           }
-          this.spawnWaveBurstEffects(event, wave.cells, wave.wave);
+
+          // 先点亮本波射线/范围并让起爆源大猫蓄力膨胀，眼睛锁定起爆点后再炸开
+          const chargeDur = wave.wave === 0 ? 0.18 : 0.28;
+          const chargeScale = wave.wave === 0 ? 0.24 : 0.38;
+          if (pulseTargets.length > 0) {
+            await this.runTween(chargeDur, 'backOut', (t) => {
+              for (const v of pulseTargets) v.scale = 1 + chargeScale * t;
+            });
+          } else {
+            await this.waitSec(chargeDur);
+          }
+
+          this.sound.playBlast(wave.wave);
+          this.spawnWaveBurstEffects(event, wave.sources, wave.cells, wave.wave);
+          this.comboTracker.blastWaves += 1;
+          waveShownDamage += wave.damage;
+          const waveCol = WAVE_COLORS[Math.min(wave.wave, WAVE_COLORS.length - 1)];
+          const waveKindLabel =
+            wave.kind === 'rainbow'
+              ? '炫彩全爆'
+              : wave.wave === 0
+                ? 'W0 宽光束起爆'
+                : `↳ W${wave.wave} 二次引爆`;
+          this.pushComboLog(wave.damage, `R${event.number} ${waveKindLabel}`, waveCol);
+
           for (const cell of wave.cells) {
             const orig = event.before[cell];
             if (orig) this.visuals.delete(orig.id);
           }
-          await this.waitSec(wave.wave === 0 ? 0.3 : 0.28);
+          await this.waitSec(wave.wave === 0 ? 0.36 : 0.42);
         }
+        this.activeWaveIndex = -1;
       } else {
         this.platform.vibrate('light');
       }
 
+      // 将本轮最终结算伤害（含纯合成/连锁加成/真伤/减伤修正）精确对齐至战报卡
+      this.comboTracker.trueDamage += event.trueDamage;
+      this.comboTracker.shieldBlocked += event.shieldBlocked;
+      if (event.waves.length === 0) {
+        const hasRainbow = event.centers.some((c) => c.resultLevel === 3);
+        const mergeTag = hasRainbow ? '合成炫彩猫' : '合成大猫';
+        const comboTag = event.bonus > 0 ? ` · 连锁+${event.bonus}` : '';
+        this.pushComboLog(event.damage, `R${event.number} ${mergeTag}${comboTag}`, '#d97706');
+      } else {
+        const delta = event.damage - waveShownDamage;
+        if (delta > 0) {
+          const extraTag =
+            event.trueDamage > 0
+              ? `真伤+${event.trueDamage} / 加成`
+              : event.bonus > 0
+                ? `连锁/祝福加成`
+                : '祝福增伤';
+          this.pushComboLog(
+            delta,
+            `R${event.number} ${extraTag}`,
+            event.trueDamage > 0 ? '#9333ea' : '#e54d42'
+          );
+        } else if (delta < 0) {
+          this.pushComboLog(delta, `R${event.number} 减伤生效`, '#2563eb', `${delta}`);
+        }
+      }
+
+      this.activeEventPhase = 'collapse';
       this.syncVisuals(event.afterClear);
       this.state.hp = [event.hp[0], event.hp[1]];
       if (this.state.shield) {
@@ -903,7 +1108,7 @@ export class CatBoomApp {
         }
       }
       if (newBigs.length > 0) {
-        void this.runTween(0.28, 'backOut', (t) => {
+        await this.runTween(0.28, 'backOut', (t) => {
           for (const v of newBigs) v.scale = 0.4 + 0.6 * t;
         });
       }
@@ -947,7 +1152,7 @@ export class CatBoomApp {
           this.visuals.set(vis.id, vis);
           spawns.push({ vis, sx, sy, tx: tp.x, ty: tp.y });
         }
-        await this.runTween(0.25, 'backOut', (t) => {
+        await this.runTween(0.26, 'backOut', (t) => {
           const posT = Math.min(1, t);
           for (const s of spawns) {
             s.vis.x = s.sx + (s.tx - s.sx) * posT;
@@ -958,17 +1163,30 @@ export class CatBoomApp {
       }
 
       this.currentEvent = null;
+      this.activeEventPhase = 'none';
+      this.activeWaveIndex = -1;
 
-      if (useSteps && idx < result.events.length - 1) {
-        this.statusText += ' · 点击“下一轮 ▶”继续';
-        await this.waitForNextStep();
+      if (idx < result.events.length - 1) {
+        if (useSteps) {
+          this.statusText += ' · 点击“下一轮”继续';
+          await this.waitForNextStep();
+        } else {
+          await this.waitSec(0.24);
+        }
       }
     }
 
     this.state = result.state;
+    this.ambientAnims = [];
+    this.ambientSpawnTimer = 1.4;
     this.syncVisuals(this.state.board);
     this.legalCount = findLegalSwaps(this.state).length;
     this.computeTurnSummary(result.events);
+    if (this.comboTracker) {
+      this.comboTracker.active = false;
+      this.comboTracker.holdLife = 1.5;
+      this.comboTracker.maxHold = 1.5;
+    }
 
     if (this.gameMode === 'roguelike') {
       await this.handleRoguelikePostSwap(attacker, result.events, turnTotalDamage, result.notice);
@@ -976,11 +1194,11 @@ export class CatBoomApp {
     }
 
     if (this.state.winner >= 0) {
-      this.statusText = `玩家 ${this.state.winner + 1} 获胜！可点“同局重开”再战一局`;
+      this.setStatus(`玩家 ${this.state.winner + 1} 获胜！可点“同局重开”再战一局`);
     } else if (result.notice) {
-      this.statusText = result.notice;
+      this.setStatus(result.notice);
     } else {
-      this.statusText = `轮到玩家 ${this.state.player + 1} · 留意对手留下的大猫`;
+      this.setStatus(`轮到玩家 ${this.state.player + 1} · 留意对手留下的大猫`);
     }
     this.refreshPlayerTurnGuides();
     this.busy = false;
@@ -1013,6 +1231,7 @@ export class CatBoomApp {
       if (this.state.winner === 0) {
         this.run.defeatedBosses.push(boss.id);
         this.bossIntent = null;
+        this.sound.playVictory();
         if (this.run.stageIndex < BOSSES.length - 1) {
           this.run.playerHp = Math.min(this.run.playerMaxHp, this.run.playerHp + STAGE_CLEAR_HEAL);
           this.state.hp[0] = this.run.playerHp;
@@ -1021,21 +1240,21 @@ export class CatBoomApp {
             this.run.seed + (this.run.stageIndex + 1) * 7919 + this.run.totalTurns * 13
           );
           this.run.phase = 'reward';
-          this.statusText = `击败 ${boss.name}！回复 +${STAGE_CLEAR_HEAL} HP，选 1 个猫猫祝福`;
-          this.showBanner(`🎉 击败 ${boss.name}！`, 1.5);
+          this.setStatus(`击败 ${boss.name}！回复 +${STAGE_CLEAR_HEAL} HP，选 1 个猫猫祝福`, 'trophy');
+          this.showBanner(`击败 ${boss.name}！`, 1.5, 'trophy');
         } else {
           this.run.phase = 'victory';
-          this.statusText = '🏆 全部猫梗 Boss 已击败，猫屋大捷！';
-          this.showBanner('🏆 通关大捷！', 1.8);
+          this.setStatus('全部猫梗 Boss 已击败，猫屋大捷！', 'trophy');
+          this.showBanner('通关大捷！', 1.8, 'trophy');
         }
         this.busy = false;
         return;
       }
 
       if (notice) {
-        this.statusText = notice;
+        this.setStatus(notice);
       } else if (post.notes.length > 0) {
-        this.statusText = `祝福生效：${post.notes.join(' · ')}`;
+        this.setStatus(`祝福生效：${post.notes.join(' · ')}`);
       }
       await this.waitSec(0.45);
       await this.runBossTurn();
@@ -1044,7 +1263,7 @@ export class CatBoomApp {
       const bossPost = applyBossPostTurnPassive(this.state, boss, events);
       if (bossPost.bossHealed > 0) {
         this.spawnFloatingText(`+${bossPost.bossHealed} HP`, 118, '#16a34a', 340);
-        this.showBanner(`🍚 大橘干饭回血 +${bossPost.bossHealed} HP！`, 1.2);
+        this.showBanner(`大橘干饭回血 +${bossPost.bossHealed} HP！`, 1.2, 'rice');
       }
       this.run.calmDefuseActive = false;
       this.run.bossTurnsTaken += 1;
@@ -1055,13 +1274,14 @@ export class CatBoomApp {
       if (this.state.winner === 1 || this.run.playerHp <= 0) {
         this.run.phase = 'defeat';
         this.bossIntent = null;
-        this.statusText = `被 ${boss.name} 挠趴啦！点击重新挑战`;
+        this.sound.playDefeat();
+        this.setStatus(`被 ${boss.name} 挠趴啦！点击重新挑战`);
         this.busy = false;
         return;
       }
 
       if (notice) {
-        this.statusText = notice;
+        this.setStatus(notice);
         await this.waitSec(0.4);
       }
       this.refreshPlayerTurnGuides();
@@ -1071,15 +1291,18 @@ export class CatBoomApp {
 
   private async runBossTurn(): Promise<void> {
     const boss = getBossProfile(this.run.stageIndex);
-    this.statusText = `轮到 ${boss.name} 行动...`;
+    this.setStatus(`轮到 ${boss.name} 行动...`);
 
     // 1. 触发 Boss 主动技能（奶牛跑酷 / 哈基米哈气）
     const skill = applyBossPreTurnSkill(this.state, boss, this.run.bossTurnsTaken);
     if (skill.triggered) {
       this.run.bossShield = this.state.shield ? this.state.shield[1] : 0;
+      this.ambientAnims = [];
+      this.ambientSpawnTimer = 1.4;
       this.syncVisuals(this.state.board);
-      this.showBanner(skill.banner, 1.5);
-      this.statusText = skill.banner;
+      const skillIcon = boss.id === 'cow' ? 'bolt' : 'crown';
+      this.showBanner(skill.banner, 1.5, skillIcon);
+      this.setStatus(skill.banner, skillIcon);
       if (skill.shieldGained > 0) {
         this.spawnFloatingText(`+${skill.shieldGained} 盾`, 118, '#2563eb', 470);
       }
@@ -1101,8 +1324,9 @@ export class CatBoomApp {
     let chosenSwap = this.bossIntent?.swap ?? null;
     if (!chosenSwap || !validSwap(this.state, chosenSwap[0], chosenSwap[1])) {
       if (chosenSwap) {
-        this.showBanner('🎯 意图被你拆穿！Boss 临时换招！', 1.3);
-        this.statusText = `🎯 你拆穿了 ${boss.name} 的计划，它正在重新找步...`;
+        this.sound.playChime();
+        this.showBanner('意图被你拆穿！Boss 临时换招！', 1.3, 'target');
+        this.setStatus(`你拆穿了 ${boss.name} 的计划，它正在重新找步...`, 'target');
         await this.waitSec(0.42);
       }
       const mult = this.run.calmDefuseActive ? 0.7 : 1;
@@ -1120,8 +1344,8 @@ export class CatBoomApp {
 
     // 3. 闪烁高亮 Boss 选中的两格，让玩家看清它动了哪两只猫
     this.bossHighlightSwap = chosenSwap;
-    this.statusText = `${boss.name} 出手交换！`;
-    await this.waitSec(0.38);
+    this.setStatus(`${boss.name} 出手交换！`);
+    await this.waitSec(0.58);
     await this.submitSwap(chosenSwap[0], chosenSwap[1], true);
   }
 
@@ -1153,10 +1377,7 @@ export class CatBoomApp {
 
   private update(dt: number): void {
     this.elapsed += dt;
-
-    if (!this.busy && !this.isInputBlocked()) {
-      this.idleSeconds += dt;
-    }
+    this.updateAmbientAnims(dt);
 
     if (this.grabbedCell >= 0) {
       this.grabElapsed += dt;
@@ -1174,6 +1395,18 @@ export class CatBoomApp {
 
     if (this.bannerLife > 0) {
       this.bannerLife = Math.max(0, this.bannerLife - dt);
+    }
+
+    if (this.comboTracker) {
+      if (this.comboTracker.pulse > 0) {
+        this.comboTracker.pulse = Math.max(0, this.comboTracker.pulse - dt * 4.5);
+      }
+      if (!this.comboTracker.active) {
+        this.comboTracker.holdLife -= dt;
+        if (this.comboTracker.holdLife <= 0) {
+          this.comboTracker = null;
+        }
+      }
     }
 
     for (let i = this.tweens.length - 1; i >= 0; i--) {
@@ -1207,6 +1440,17 @@ export class CatBoomApp {
       g.rot += g.vRot * dt;
     }
 
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const r = this.shockwaves[i];
+      r.life -= dt;
+      if (r.life <= 0) {
+        this.shockwaves.splice(i, 1);
+        continue;
+      }
+      const p = 1 - Math.max(0, r.life / r.maxLife);
+      r.radius = 28 + (r.maxRadius - 28) * easeCubicInOut(p);
+    }
+
     for (let i = this.floatings.length - 1; i >= 0; i--) {
       const f = this.floatings[i];
       f.life -= dt;
@@ -1216,6 +1460,46 @@ export class CatBoomApp {
       }
       f.y -= 52 * dt * this.speed;
     }
+  }
+
+  /** 全局稀疏点缀：每隔约 1.6~2.8 秒挑 1 只静卧猫轻眨眼或轻甩尾，同屏最多 2 只 */
+  private updateAmbientAnims(dt: number): void {
+    for (let i = this.ambientAnims.length - 1; i >= 0; i--) {
+      const a = this.ambientAnims[i];
+      a.elapsed += dt;
+      if (a.elapsed >= a.duration || !this.visuals.has(a.catId) || a.catId === this.grabbedCatId) {
+        this.ambientAnims.splice(i, 1);
+      }
+    }
+
+    if (this.busy || this.ambientAnims.length >= 2) return;
+
+    this.ambientSpawnTimer -= dt;
+    if (this.ambientSpawnTimer > 0) return;
+
+    this.ambientSpawnTimer = 1.6 + Math.random() * 1.2;
+
+    const busyIds = new Set(this.ambientAnims.map((a) => a.catId));
+    const candidates: number[] = [];
+    for (const vis of this.visuals.values()) {
+      if (vis.id === this.grabbedCatId || busyIds.has(vis.id)) continue;
+      candidates.push(vis.id);
+    }
+    if (candidates.length === 0) return;
+
+    const preferred =
+      candidates.length > 1
+        ? candidates.filter((id) => id !== this.lastAmbientCatId)
+        : candidates;
+    const catId = preferred[Math.floor(Math.random() * preferred.length)];
+    const isBlink = Math.random() < 0.58;
+    this.lastAmbientCatId = catId;
+    this.ambientAnims.push({
+      catId,
+      frame: isBlink ? 2 : 1,
+      elapsed: 0,
+      duration: isBlink ? 0.28 : 0.85,
+    });
   }
 
   /** 绘制手绘六边形缝线猫窝 */
@@ -1264,13 +1548,14 @@ export class CatBoomApp {
     ctx.restore();
   }
 
-  /** 绘制手绘珊瑚粉星星爆发射线（还原概念图核心特效） */
+  /** 绘制手绘星星爆发射线（支持按波次着色） */
   private drawStarBlastArrow(
     ctx: CanvasRenderingContext2D,
     ax: number,
     ay: number,
     bx: number,
-    by: number
+    by: number,
+    strokeColor = '#ff7e70'
   ): void {
     const dx = bx - ax;
     const dy = by - ay;
@@ -1300,7 +1585,7 @@ export class CatBoomApp {
 
     ctx.save();
     drawStroke('#ffffff', 14);
-    drawStroke('#ff7e70', 7.5);
+    drawStroke(strokeColor, 7.5);
 
     // 沿射线点缀手绘黄色小星星
     const starCount = len > 180 ? 3 : 2;
@@ -1354,6 +1639,38 @@ export class CatBoomApp {
     ctx.restore();
   }
 
+  private drawUiIcon(
+    ctx: CanvasRenderingContext2D, key: UiIconKey, cx: number, cy: number, size: number
+  ): boolean {
+    const image = this.assets.icons[key];
+    if (!image?.ready) return false;
+    ctx.drawImage(image.el, cx - size / 2, cy - size / 2, size, size);
+    return true;
+  }
+
+  private drawCenteredIconText(
+    ctx: CanvasRenderingContext2D,
+    icon: UiIconKey | null,
+    text: string,
+    centerX: number,
+    centerY: number,
+    iconSize: number,
+    gap: number
+  ): void {
+    let textX = centerX;
+    if (icon) {
+      const iconX = centerX - (ctx.measureText(text).width + gap) / 2;
+      if (this.drawUiIcon(ctx, icon, iconX, centerY, iconSize)) {
+        textX += (iconSize + gap) / 2;
+      }
+    }
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, textX, centerY);
+    ctx.restore();
+  }
+
   /** 手绘贴纸风按钮 */
   private drawStickerButton(ctx: CanvasRenderingContext2D, btn: ButtonRect): void {
     this.buttons.push(btn);
@@ -1379,7 +1696,11 @@ export class CatBoomApp {
     ctx.font = `800 ${btn.round ? 26 : 18}px ${FONT_FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 1);
+    const cx = btn.x + btn.w / 2;
+    const cy = btn.y + btn.h / 2;
+    if (!btn.icon || !this.drawUiIcon(ctx, btn.icon, cx, cy, Math.min(btn.w, btn.h) * 0.72)) {
+      ctx.fillText(btn.label, cx, cy + 1);
+    }
     ctx.restore();
   }
 
@@ -1393,7 +1714,7 @@ export class CatBoomApp {
     const shield = this.state.shield ? this.state.shield[player] : 0;
 
     const barX = 96;
-    const barW = player === 1 ? 522 : 596;
+    const barW = player === 1 ? 460 : 596;
     const barH = 48;
     const radius = barH / 2;
 
@@ -1427,12 +1748,12 @@ export class CatBoomApp {
     drawRoundedRect(ctx, barX, y, barW, barH, radius);
     ctx.stroke();
 
-    // 血条文字
+    // 血条文字（有护盾胶囊时略向左让位，避免文字与护盾重叠）
     ctx.fillStyle = INK;
-    ctx.font = `900 22px ${FONT_FAMILY}`;
+    ctx.font = `900 ${player === 1 ? 20 : 22}px ${FONT_FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const centerX = barX + barW * 0.5;
+    const centerX = shield > 0 ? barX + (barW - 84) * 0.5 : barX + barW * 0.5;
     let label = '';
     if (isRogue && boss) {
       if (player === 1) {
@@ -1442,7 +1763,7 @@ export class CatBoomApp {
         label = `你  ${this.state.hp[0]}/${maxHp}${calmTag}`;
       }
     } else {
-      const suffix = isWinner ? '  ★ 获胜' : isTurn ? '  · 当前回合' : '';
+      const suffix = isWinner ? '  · 获胜' : isTurn ? '  · 当前回合' : '';
       label = `P${player + 1}  ${this.state.hp[player]}${suffix}`;
     }
     ctx.fillText(label, centerX, y + barH / 2 + 1);
@@ -1461,7 +1782,7 @@ export class CatBoomApp {
       ctx.stroke();
       ctx.fillStyle = '#1d4ed8';
       ctx.font = `900 16px ${FONT_FAMILY}`;
-      ctx.fillText(`🛡 ${shield}`, sx + sw / 2, sy + sh / 2 + 1);
+      this.drawCenteredIconText(ctx, 'shield', `${shield}`, sx + sw / 2, sy + sh / 2 + 1, 22, 4);
     }
 
     // 左侧趴栏杆萌猫 / Boss 贴纸
@@ -1536,7 +1857,14 @@ export class CatBoomApp {
           : this.bossIntent
             ? this.bossIntent.skillText
             : boss.traitShort;
-      ctx.fillText(`·  ${skillBadge}`, 212, 61);
+      const skillIcon = this.bossIntent?.skillReady && boss.id !== 'orange'
+        ? boss.id === 'cow' ? 'bolt' : 'crown'
+        : null;
+      if (skillIcon && this.drawUiIcon(ctx, skillIcon, 223, 60, 22)) {
+        ctx.fillText(skillBadge, 238, 61);
+      } else {
+        ctx.fillText(`·  ${skillBadge}`, 212, 61);
+      }
 
       // 右侧 3 关闯关进度圆点
       for (let s = 0; s < BOSSES.length; s++) {
@@ -1558,14 +1886,32 @@ export class CatBoomApp {
       ctx.restore();
     }
 
-    // 顶部 Boss / P2 血条 + 右侧圆形 "?" 玩法按钮
+    // 顶部 Boss / P2 血条 + 右侧圆形音效与 "?" 玩法按钮
     this.drawPlayerBar(ctx, 1, 92);
     this.drawStickerButton(ctx, {
+      id: 'sound',
+      x: 568,
+      y: 89,
+      w: 54,
+      h: 54,
+      icon: this.sound.isMuted() ? 'sound_off' : 'sound_on',
+      label: this.sound.isMuted() ? '静' : '音',
+      round: true,
+      accent: !this.sound.isMuted(),
+      onClick: () => {
+        const nowMuted = this.sound.toggleMute();
+        if (!nowMuted) {
+          this.sound.unlock();
+          this.sound.playChime();
+        }
+      },
+    });
+    this.drawStickerButton(ctx, {
       id: 'rules',
-      x: 636,
-      y: 88,
-      w: 58,
-      h: 58,
+      x: 634,
+      y: 89,
+      w: 54,
+      h: 54,
       label: '?',
       round: true,
       onClick: () => {
@@ -1594,7 +1940,8 @@ export class CatBoomApp {
     ctx.font = `700 17px ${FONT_FAMILY}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this.statusText, 42, 182);
+    const hasStatusIcon = this.statusIcon && this.drawUiIcon(ctx, this.statusIcon, 54, 181, 26);
+    ctx.fillText(this.statusText, hasStatusIcon ? 72 : 42, 182);
     ctx.restore();
 
     if (this.stepWaitResolver) {
@@ -1604,7 +1951,7 @@ export class CatBoomApp {
         y: 158,
         w: 158,
         h: 46,
-        label: '下一轮 ▶',
+        label: '下一轮',
         accent: true,
         onClick: () => {
           const resolve = this.stepWaitResolver;
@@ -1618,11 +1965,12 @@ export class CatBoomApp {
     ctx.save();
     ctx.translate(this.shakeOffsetX, this.shakeOffsetY);
 
-    // 计算提示交换集合与搭档朝向（用猫咪专属挥爪动作帧替代旧版简易摇动）
+    // 仅在持有肉鸽道具「猫须雷达」时，激活可合成/引爆猫咪的挥爪招手提示
     const activeHintCells = new Set<number>();
     const activeHighCells = new Set<number>();
     const hintPartner = new Map<number, number>();
-    if (!this.isInputBlocked() && this.selected < 0 && this.grabbedCell < 0) {
+    const hintsUnlocked = this.gameMode === 'roguelike' && hasHintRelic(this.run.relics);
+    if (hintsUnlocked && !this.isInputBlocked() && this.selected < 0 && this.grabbedCell < 0) {
       for (const [ha, hb] of this.hintSet.highValue) {
         activeHintCells.add(ha);
         activeHintCells.add(hb);
@@ -1631,7 +1979,7 @@ export class CatBoomApp {
         hintPartner.set(ha, hb);
         hintPartner.set(hb, ha);
       }
-      if (activeHintCells.size === 0 && this.idleSeconds >= 3.5 && this.hintSet.fallback) {
+      if (activeHintCells.size === 0 && this.hintSet.fallback) {
         const [fa, fb] = this.hintSet.fallback;
         activeHintCells.add(fa);
         activeHintCells.add(fb);
@@ -1661,7 +2009,7 @@ export class CatBoomApp {
         ? NEST_EMPTY_RIM
         : cat.level >= 2
           ? NEST_BIG_RIM
-          : NEST_RIM_COLORS[cat.color % 4];
+          : NEST_RIM_COLORS[cat.color % NEST_RIM_COLORS.length];
       this.drawCatNest(
         ctx,
         p.x,
@@ -1715,14 +2063,20 @@ export class CatBoomApp {
       if (cat) idToCell.set(cat.id, c);
     }
 
+    const ambientFrameMap = new Map<number, number>();
+    for (const a of this.ambientAnims) {
+      ambientFrameMap.set(a.catId, a.frame);
+    }
+
     // 全身猫咪精灵（普通猫先画，被拎起的猫留到最顶层）
     for (const vis of this.visuals.values()) {
       if (vis.id === this.grabbedCatId) continue;
       const cell = idToCell.get(vis.id);
-      let animState: CatAnimState = 'idle';
+      let animState: CatAnimState = 'static';
       let flipX = false;
       let nudgeX = 0;
       let nudgeY = 0;
+      let forceFrame: number | undefined;
       if (cell !== undefined && activeHintCells.has(cell)) {
         animState = 'hint';
         const partner = hintPartner.get(cell);
@@ -1738,6 +2092,8 @@ export class CatBoomApp {
           nudgeX = (dx / dist) * lean;
           nudgeY = (dy / dist) * lean;
         }
+      } else {
+        forceFrame = ambientFrameMap.get(vis.id);
       }
       drawCatSprite(
         ctx,
@@ -1752,6 +2108,7 @@ export class CatBoomApp {
           animState,
           seedOffset: vis.id,
           flipX,
+          forceFrame,
         },
         this.assets
       );
@@ -1775,32 +2132,49 @@ export class CatBoomApp {
       );
     }
 
-    // 4. 预览 / 当前轮事件视觉指示层
-    const overlayEvent =
-      this.preview.valid && this.preview.event ? this.preview.event : this.currentEvent;
-    if (overlayEvent) {
-      const waveColors = ['#ff9852', '#ff4d8d', '#a855f7', '#ec4899'];
+    // 扩散冲击波环（标记每一波的起爆中心）
+    for (const ring of this.shockwaves) {
+      const alpha = Math.max(0, ring.life / ring.maxLife);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.85;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 11;
+      ctx.beginPath();
+      ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = ring.color;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 4. 预览 / 当前轮逐阶段视觉指示层
+    const previewEvent = this.preview.valid && this.preview.event ? this.preview.event : null;
+    const overlayEvent = previewEvent ?? this.currentEvent;
+    if (previewEvent) {
       const cellWaveMap = new Map<number, number>();
-      for (const wave of overlayEvent.waves) {
+      for (const wave of previewEvent.waves) {
         for (const cell of wave.cells) {
           cellWaveMap.set(cell, wave.wave);
         }
       }
-      for (const cell of overlayEvent.cleared) {
+      for (const cell of previewEvent.cleared) {
         const p = this.cellPoint(cell);
         const wIdx = cellWaveMap.get(cell);
         ctx.strokeStyle =
-          wIdx !== undefined ? waveColors[Math.min(wIdx, waveColors.length - 1)] : '#ff9852';
+          wIdx !== undefined ? WAVE_COLORS[Math.min(wIdx, WAVE_COLORS.length - 1)] : '#ff9852';
         ctx.lineWidth = wIdx && wIdx > 0 ? 4.8 : 4;
         ctx.beginPath();
         ctx.arc(p.x, p.y, 48, 0, Math.PI * 2);
         ctx.stroke();
       }
-      for (const wave of overlayEvent.waves) {
+      for (const wave of previewEvent.waves) {
         if (wave.wave > 0) {
           for (const src of wave.sources) {
             const p = this.cellPoint(src);
-            ctx.strokeStyle = waveColors[Math.min(wave.wave, waveColors.length - 1)];
+            ctx.strokeStyle = WAVE_COLORS[Math.min(wave.wave, WAVE_COLORS.length - 1)];
             ctx.lineWidth = 4;
             ctx.setLineDash([6, 5]);
             ctx.beginPath();
@@ -1810,7 +2184,7 @@ export class CatBoomApp {
           }
         }
       }
-      for (const center of overlayEvent.centers) {
+      for (const center of previewEvent.centers) {
         const p = this.cellPoint(center.cell);
         ctx.strokeStyle = '#38b583';
         ctx.lineWidth = 4.5;
@@ -1820,18 +2194,97 @@ export class CatBoomApp {
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      for (const path of overlayEvent.rays) {
+      for (const path of previewEvent.rays) {
         if (path.length >= 2) {
           const a = this.cellPoint(path[0]);
           const b = this.cellPoint(path[path.length - 1]);
           this.drawStarBlastArrow(ctx, a.x, a.y, b.x, b.y);
         }
       }
-      if (!this.currentEvent) {
-        for (const move of overlayEvent.moves) {
-          const a = this.cellPoint(move.from);
-          const b = this.cellPoint(move.to);
-          this.drawSimpleArrow(ctx, a.x, a.y, b.x, b.y, '#3bb5a5', 3.6);
+      for (const move of previewEvent.moves) {
+        const a = this.cellPoint(move.from);
+        const b = this.cellPoint(move.to);
+        this.drawSimpleArrow(ctx, a.x, a.y, b.x, b.y, '#3bb5a5', 3.6);
+      }
+    } else if (this.currentEvent) {
+      const ev = this.currentEvent;
+      if (this.activeEventPhase === 'match') {
+        // 匹配确认阶段：仅标出本轮形成连线的格子与合成中心
+        const matchedCells = new Set<number>();
+        for (const line of ev.lines) {
+          for (const c of line.cells) matchedCells.add(c);
+        }
+        ctx.save();
+        for (const cell of matchedCells) {
+          const p = this.cellPoint(cell);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 4.5;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 49, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        for (const center of ev.centers) {
+          const p = this.cellPoint(center.cell);
+          ctx.strokeStyle = '#38b583';
+          ctx.lineWidth = 4.8;
+          ctx.setLineDash([8, 6]);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 54, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.restore();
+      } else if (this.activeEventPhase === 'merge') {
+        // 聚拢合成阶段：高亮绿色合成中心
+        ctx.save();
+        for (const center of ev.centers) {
+          const p = this.cellPoint(center.cell);
+          ctx.strokeStyle = center.resultLevel === 3 ? '#d946ef' : '#38b583';
+          ctx.lineWidth = 5;
+          ctx.setLineDash([8, 6]);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 54, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.restore();
+      } else if (this.activeEventPhase === 'wave' && this.activeWaveIndex >= 0) {
+        // 逐波爆发阶段：只亮起当前这一波的受击格、起爆源与光束射线
+        const wave = ev.waves[this.activeWaveIndex];
+        if (wave) {
+          const col = WAVE_COLORS[Math.min(wave.wave, WAVE_COLORS.length - 1)];
+          ctx.save();
+          for (const cell of wave.cells) {
+            const p = this.cellPoint(cell);
+            traceRoundedHexagon(ctx, p.x, p.y, HEX_RADIUS - 4, 10);
+            ctx.globalAlpha = 0.22;
+            ctx.fillStyle = col;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = col;
+            ctx.lineWidth = wave.wave > 0 ? 4.8 : 4;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 48, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          for (const src of wave.sources) {
+            const p = this.cellPoint(src);
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 5;
+            ctx.setLineDash([7, 5]);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 58, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          ctx.restore();
+          for (const path of wave.rays) {
+            if (path.length >= 2) {
+              const a = this.cellPoint(path[0]);
+              const b = this.cellPoint(path[path.length - 1]);
+              this.drawStarBlastArrow(ctx, a.x, a.y, b.x, b.y, col);
+            }
+          }
         }
       }
     }
@@ -1872,7 +2325,7 @@ export class CatBoomApp {
         ctx.save();
         ctx.fillStyle = 'rgba(78, 52, 46, 0.24)';
         ctx.beginPath();
-        ctx.ellipse(this.grabSmoothX, this.grabSmoothY + 52, 26, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.grabSmoothX, this.grabSmoothY + 56, 26, 10, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
@@ -1916,18 +2369,21 @@ export class CatBoomApp {
     // 底部玩家血条
     this.drawPlayerBar(ctx, 0, 1054);
 
-    // 肉鸽模式下在血条右上侧展示已收集祝福小贴纸
+    // 肉鸽模式下在血条上方展示已收集祝福小贴纸（支持最多 3 张整齐对齐）
     if (this.gameMode === 'roguelike' && this.run.relics.length > 0) {
-      const startX = 128;
+      const count = this.run.relics.length;
+      const badgeW = count >= 3 ? 184 : 186;
+      const gap = 12;
+      const startX = count >= 3 ? 116 : 128;
       const badgeY = 1000;
-      for (let i = 0; i < this.run.relics.length; i++) {
+      for (let i = 0; i < count; i++) {
         const def = getRelicDef(this.run.relics[i]);
-        const rx = startX + i * 192;
+        const rx = startX + i * (badgeW + gap);
         ctx.save();
         ctx.fillStyle = 'rgba(255, 250, 240, 0.94)';
         ctx.strokeStyle = def.badgeColor;
         ctx.lineWidth = 2.6;
-        drawRoundedRect(ctx, rx, badgeY, 182, 38, 19);
+        drawRoundedRect(ctx, rx, badgeY, badgeW, 38, 19);
         ctx.fill();
         ctx.stroke();
 
@@ -2104,8 +2560,13 @@ export class CatBoomApp {
       ctx.font = `900 22px ${FONT_FAMILY}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(this.bannerText, VIRTUAL_W / 2, by + bh / 2 + 1);
+      this.drawCenteredIconText(ctx, this.bannerIcon, this.bannerText, VIRTUAL_W / 2, by + bh / 2 + 1, 32, 8);
       ctx.restore();
+    }
+
+    // 出手确认后的实时连击伤害战报卡（覆盖顶部状态条，零遮挡棋盘核心）
+    if (this.comboTracker && !this.stepWaitResolver) {
+      this.renderComboTracker(ctx, this.comboTracker);
     }
 
     // 6. 弹窗层（肉鸽 3 选 1 与结算优先于棋盘）
@@ -2115,13 +2576,115 @@ export class CatBoomApp {
       this.renderRelicsModal(ctx);
     } else if (this.showDebugPanel) {
       this.renderDebugPanel(ctx);
-    } else if (this.gameMode === 'roguelike' && this.run.phase === 'reward') {
+    } else if (
+      this.gameMode === 'roguelike' &&
+      (this.run.phase === 'opening_reward' || this.run.phase === 'reward')
+    ) {
       this.renderRewardModal(ctx);
     } else if (
       this.gameMode === 'roguelike' &&
       (this.run.phase === 'victory' || this.run.phase === 'defeat')
     ) {
       this.renderRunEndModal(ctx);
+    }
+
+    ctx.restore();
+  }
+
+  private renderComboTracker(ctx: CanvasRenderingContext2D, ct: ComboTracker): void {
+    const fadeAlpha = ct.active ? 1 : Math.max(0, Math.min(1, ct.holdLife / 0.45));
+    if (fadeAlpha <= 0.01) return;
+
+    const x = 24;
+    const y = 152;
+    const w = 672;
+    const h = 88;
+    const accent = ct.isPlayer ? '#e67e22' : '#dc2626';
+
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+
+    // 暖棕贴纸投影
+    ctx.fillStyle = 'rgba(78, 52, 46, 0.18)';
+    drawRoundedRect(ctx, x, y + 4, w, h, 20);
+    ctx.fill();
+
+    // 战报卡片主体
+    ctx.fillStyle = ct.isPlayer ? 'rgba(255, 251, 240, 0.97)' : 'rgba(255, 242, 242, 0.97)';
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 3.2;
+    drawRoundedRect(ctx, x, y, w, h, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    // 左栏：出手者 + 轮数/连爆徽章 + 弹跳总伤害大数字
+    ctx.fillStyle = INK_SOFT;
+    ctx.font = `800 14px ${FONT_FAMILY}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const metaParts: string[] = [`${ct.actorLabel} · 连击战报`];
+    if (ct.rounds > 0) metaParts.push(`${ct.rounds}轮`);
+    if (ct.blastWaves > 0) metaParts.push(`${ct.blastWaves}波爆`);
+    ctx.fillText(metaParts.join(' · '), x + 18, y + 23);
+
+    const popScale = 1 + 0.22 * Math.sin(ct.pulse * Math.PI);
+    ctx.save();
+    ctx.translate(x + 18, y + 58);
+    ctx.scale(popScale, popScale);
+    ctx.fillStyle = ct.isPlayer ? '#d9534f' : '#b91c1c';
+    ctx.font = `900 32px ${FONT_FAMILY}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const hasBlastIcon = this.drawUiIcon(ctx, 'blast', 15, 0, 30);
+    ctx.fillText(`${ct.totalDamage} 伤`, hasBlastIcon ? 36 : 0, 0);
+    ctx.restore();
+
+    // 若有穿盾真伤或护盾抵挡，在总伤右侧紧贴小胶囊标出
+    if (ct.trueDamage > 0 || ct.shieldBlocked > 0) {
+      const tagText =
+        ct.trueDamage > 0 ? `真伤 ${ct.trueDamage}` : `盾挡 ${ct.shieldBlocked}`;
+      ctx.fillStyle = ct.trueDamage > 0 ? '#7e22ce' : '#1d4ed8';
+      ctx.font = `800 13px ${FONT_FAMILY}`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tagText, x + 238, y + 60);
+    }
+
+    // 竖向手绘虚线分隔
+    ctx.strokeStyle = 'rgba(78, 52, 46, 0.24)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x + 250, y + 14);
+    ctx.lineTo(x + 250, y + h - 14);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 右栏：最近 3 条实时结算明细流水
+    const recent = ct.logs.slice(-3);
+    if (recent.length === 0) {
+      ctx.fillStyle = INK_SOFT;
+      ctx.font = `700 16px ${FONT_FAMILY}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('正在结算本回合连击...', x + 266, y + h / 2);
+    } else {
+      const rowH = 24;
+      const startY = y + (h - recent.length * rowH) / 2 + rowH / 2;
+      recent.forEach((entry, idx) => {
+        const ry = startY + idx * rowH;
+        const isLatest = idx === recent.length - 1;
+        ctx.fillStyle = isLatest ? INK : INK_SOFT;
+        ctx.font = `${isLatest ? '800' : '600'} 15px ${FONT_FAMILY}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(entry.label, x + 266, ry);
+
+        ctx.fillStyle = entry.color;
+        ctx.font = `900 ${isLatest ? 17 : 15}px ${FONT_FAMILY}`;
+        ctx.textAlign = 'right';
+        ctx.fillText(entry.deltaText, x + w - 18, ry);
+      });
     }
 
     ctx.restore();
@@ -2143,26 +2706,41 @@ export class CatBoomApp {
     ctx.fill();
     ctx.stroke();
 
+    const isOpening = this.run.phase === 'opening_reward';
     const clearedBoss = getBossProfile(this.run.stageIndex);
-    const nextBoss = getBossProfile(this.run.stageIndex + 1);
+    const nextBoss = getBossProfile(isOpening ? 0 : this.run.stageIndex + 1);
 
     ctx.fillStyle = '#d97706';
     ctx.font = `900 30px ${FONT_FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(`🎉 击败 ${clearedBoss.name}！`, VIRTUAL_W / 2, y + 58);
+    this.drawCenteredIconText(
+      ctx,
+      isOpening ? 'gift' : 'trophy',
+      isOpening ? '猫神起手礼 · 开局 3 选 1' : `击败 ${clearedBoss.name}！`,
+      VIRTUAL_W / 2,
+      y + 47,
+      38,
+      8
+    );
 
     ctx.fillStyle = INK_SOFT;
     ctx.font = `700 18px ${FONT_FAMILY}`;
     ctx.fillText(
-      `已回复 +${STAGE_CLEAR_HEAL} HP（当前 ${this.run.playerHp}/${this.run.playerMaxHp}） · 选择 1 个流派祝福`,
+      isOpening
+        ? '先选 1 个初始流派祝福，带着专属机制开启 3 关肉鸽闯关！'
+        : `已回复 +${STAGE_CLEAR_HEAL} HP（当前 ${this.run.playerHp}/${this.run.playerMaxHp}） · 选择 1 个流派祝福`,
       VIRTUAL_W / 2,
       y + 96
     );
 
     ctx.fillStyle = '#b45309';
     ctx.font = `700 16px ${FONT_FAMILY}`;
-    ctx.fillText(`下一关预告：第 ${nextBoss.stage} 关 ${nextBoss.name}（${nextBoss.traitShort}）`, VIRTUAL_W / 2, y + 128);
+    ctx.fillText(
+      `${isOpening ? '第 1 关预告' : '下一关预告'}：第 ${nextBoss.stage} 关 ${nextBoss.name}（${nextBoss.traitShort}）`,
+      VIRTUAL_W / 2,
+      y + 128
+    );
 
     // 3 张肉鸽祝福手绘贴纸卡
     const cardW = 596;
@@ -2243,7 +2821,7 @@ export class CatBoomApp {
       ctx.fillStyle = def.badgeColor;
       ctx.font = `800 16px ${FONT_FAMILY}`;
       ctx.textAlign = 'right';
-      ctx.fillText('点击选择此祝福 ▶', cardX + cardW - 22, cy + cardH - 20);
+      ctx.fillText('点击选择此祝福', cardX + cardW - 22, cy + cardH - 20);
       ctx.restore();
     });
   }
@@ -2345,7 +2923,10 @@ export class CatBoomApp {
     ctx.font = `900 32px ${FONT_FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(isWin ? '🏆 猫屋大捷 · 全通关！' : '🐾 被猫猫挠趴啦', VIRTUAL_W / 2, y + 214);
+    this.drawCenteredIconText(
+      ctx, isWin ? 'trophy' : 'paw', isWin ? '猫屋大捷 · 全通关！' : '被猫猫挠趴啦',
+      VIRTUAL_W / 2, y + 202, 40, 8
+    );
 
     ctx.fillStyle = INK_SOFT;
     ctx.font = `700 18px ${FONT_FAMILY}`;
@@ -2387,7 +2968,7 @@ export class CatBoomApp {
       y: y + h - 92,
       w: 240,
       h: 56,
-      label: isWin ? '再来一局 ▶' : '重新挑战 ▶',
+      label: isWin ? '再来一局' : '重新挑战',
       accent: true,
       onClick: () =>
         this.startNewRoguelikeRun(
@@ -2429,10 +3010,10 @@ export class CatBoomApp {
       '• 红虚线框标出 Boss 下回合准备动哪两只猫，可抢先拆招！',
       '• 大橘：专抢橘猫并干饭回血 ｜ 奶牛猫：每2回合跑酷变大猫',
       '• 哈基米：每2回合哈气叠 8 盾 + 造大猫，高伤抢爆！',
-      '• 击败 Boss 回复 +25 血，并在三大流派中 3 选 1 祝福。',
+      '• 开局先选 1 个初始祝福；击败 Boss 回 +25 血并再 3 选 1。',
       '',
-      '【操作与微动提示】',
-      '• 轻微晃动的猫 = 高价值可引爆/多连提示，拖动或点选即可换。',
+      '【操作与视觉指示】',
+      '• 拖动或点选相邻猫交换；获得「猫须雷达」后可合成猫会挥爪提示。',
       '• 绿虚环 = 合成中心 ｜ 橙/粉圈 = 逐波爆发 ｜ 青箭 = 收缩。',
     ];
 

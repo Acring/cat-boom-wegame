@@ -10,20 +10,25 @@ interface WechatTouchEvent {
   changedTouches: WechatTouch[];
 }
 
+interface WechatWindowInfo {
+  windowWidth: number;
+  windowHeight: number;
+  pixelRatio: number;
+  statusBarHeight?: number;
+  safeArea?: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+    width: number;
+    height: number;
+  };
+}
+
 interface WechatGlobal {
   createCanvas(): HTMLCanvasElement;
-  getWindowInfo?(): {
-    windowWidth: number;
-    windowHeight: number;
-    pixelRatio: number;
-    statusBarHeight?: number;
-  };
-  getSystemInfoSync(): {
-    windowWidth: number;
-    windowHeight: number;
-    pixelRatio: number;
-    statusBarHeight?: number;
-  };
+  getWindowInfo?(): WechatWindowInfo;
+  getSystemInfoSync(): WechatWindowInfo;
   getMenuButtonBoundingClientRect?(): { top: number; bottom: number; left: number; right: number };
   onTouchStart(cb: (e: WechatTouchEvent) => void): void;
   onTouchMove(cb: (e: WechatTouchEvent) => void): void;
@@ -41,6 +46,8 @@ export interface Platform {
   height: number;
   dpr: number;
   topInset: number;
+  readonly bottomInset: number;
+  readonly isTouch: boolean;
   isWechat: boolean;
   onPointerDown(cb: (x: number, y: number) => void): void;
   onPointerMove(cb: (x: number, y: number) => void): void;
@@ -57,6 +64,8 @@ export function createPlatform(): Platform {
   let height: number;
   let dpr: number;
   let topInset = 0;
+  let bottomInset = 0;
+  let isTouch = true;
 
   if (isWechat && wx) {
     canvas = wx.createCanvas();
@@ -64,6 +73,9 @@ export function createPlatform(): Platform {
       typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
     width = info.windowWidth;
     height = info.windowHeight;
+    if (info.safeArea) {
+      bottomInset = Math.max(0, Math.min(width > 0 ? height - info.safeArea.bottom : 0, 48));
+    }
     dpr = Math.min(info.pixelRatio || 1, 2);
 
     // 自动避让微信状态栏与右上角胶囊按钮
@@ -78,6 +90,9 @@ export function createPlatform(): Platform {
       topInset = (info.statusBarHeight || 20) + 40;
     }
   } else {
+    isTouch =
+      (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+      (typeof window !== 'undefined' && 'ontouchstart' in window);
     const existing = document.getElementById('game-canvas') as HTMLCanvasElement | null;
     canvas = existing || document.createElement('canvas');
     if (!existing) {
@@ -89,6 +104,17 @@ export function createPlatform(): Platform {
     } else {
       width = window.innerWidth;
       height = window.innerHeight;
+      const probe = document.createElement('div');
+      try {
+        probe.style.cssText = 'position:absolute;visibility:hidden;padding-bottom:env(safe-area-inset-bottom)';
+        document.body.appendChild(probe);
+        const inset = parseFloat(window.getComputedStyle(probe).paddingBottom) || 0;
+        bottomInset = Math.max(0, Math.min(inset, 48));
+      } catch {
+        bottomInset = 0;
+      } finally {
+        probe.parentNode?.removeChild(probe);
+      }
     }
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.style.width = `${width}px`;
@@ -177,6 +203,8 @@ export function createPlatform(): Platform {
     height,
     dpr,
     topInset,
+    bottomInset,
+    isTouch,
     isWechat,
     onPointerDown(cb) {
       downListeners.push(cb);

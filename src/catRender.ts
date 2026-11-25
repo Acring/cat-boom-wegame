@@ -3,13 +3,13 @@
 import type { GameAssets } from './assets';
 import type { CatLevel } from './rules';
 
-export const CAT_PALETTE = ['#ffb870', '#a9a6f8', '#8cd9b3', '#f9a9be'] as const;
+export const CAT_PALETTE = ['#ffb870', '#96b2cc', '#524952', '#fffaf0', '#efe0c8'] as const;
 export const ANIM_FRAME_SIZE = 192;
 export const ANIM_FRAME_COUNT = 10;
 const INK = '#4e342e';
 const FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif';
 
-export type CatAnimState = 'idle' | 'hint' | 'grabbed';
+export type CatAnimState = 'static' | 'idle' | 'hint' | 'grabbed';
 
 export interface CatDrawOptions {
   x: number;
@@ -35,6 +35,10 @@ export function pickCatAnimFrame(
   seedOffset = 0,
   grabElapsed = 0
 ): number {
+  if (animState === 'static') {
+    return 0;
+  }
+
   if (animState === 'grabbed') {
     // 刚拎起前 0.14s 先愣住拉长(帧7)，随后高频四爪扑腾(帧8 <-> 帧9)，偶尔穿插愣住帧
     if (grabElapsed < 0.14) return 7;
@@ -108,13 +112,14 @@ export function drawCatSprite(
     alpha = 1,
     elapsed = 0,
     showBadge = true,
-    animState = 'idle',
+    animState = 'static',
     seedOffset = 0,
     grabElapsed = 0,
     flipX = false,
     forceFrame,
   } = opts;
-  const idx = ((colorId % 4) + 4) % 4;
+  const n = CAT_PALETTE.length;
+  const idx = ((colorId % n) + n) % n;
   const isGrabbed = animState === 'grabbed';
 
   ctx.save();
