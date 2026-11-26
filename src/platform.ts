@@ -35,6 +35,8 @@ interface WechatGlobal {
   onTouchEnd(cb: (e: WechatTouchEvent) => void): void;
   onTouchCancel?(cb: (e: WechatTouchEvent) => void): void;
   vibrateShort?(options?: { type?: 'heavy' | 'medium' | 'light' }): void;
+  getStorageSync?(key: string): unknown;
+  setStorageSync?(key: string, data: string): void;
 }
 
 declare const wx: WechatGlobal | undefined;
@@ -54,6 +56,8 @@ export interface Platform {
   onPointerUp(cb: (x: number, y: number) => void): void;
   onPointerHover(cb: (x: number, y: number) => void): void;
   vibrate(type?: 'light' | 'medium' | 'heavy'): void;
+  getStorage(key: string): string | null;
+  setStorage(key: string, value: string): void;
 }
 
 export function createPlatform(): Platform {
@@ -225,6 +229,33 @@ export function createPlatform(): Platform {
         } catch {
           // 忽略不支持震动的设备
         }
+      }
+    },
+    getStorage(key: string): string | null {
+      try {
+        if (isWechat && wx && typeof wx.getStorageSync === 'function') {
+          const v = wx.getStorageSync(key);
+          return typeof v === 'string' && v.length > 0 ? v : null;
+        }
+        if (typeof window !== 'undefined' && window.localStorage) {
+          return window.localStorage.getItem(key);
+        }
+      } catch {
+        // 忽略隐私模式或受限存储环境
+      }
+      return null;
+    },
+    setStorage(key: string, value: string): void {
+      try {
+        if (isWechat && wx && typeof wx.setStorageSync === 'function') {
+          wx.setStorageSync(key, value);
+          return;
+        }
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem(key, value);
+        }
+      } catch {
+        // 忽略受限存储环境
       }
     },
   };

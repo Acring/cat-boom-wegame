@@ -157,6 +157,31 @@
           } catch (e) {
           }
         }
+      },
+      getStorage(key) {
+        try {
+          if (isWechat && wx && typeof wx.getStorageSync === "function") {
+            const v = wx.getStorageSync(key);
+            return typeof v === "string" && v.length > 0 ? v : null;
+          }
+          if (typeof window !== "undefined" && window.localStorage) {
+            return window.localStorage.getItem(key);
+          }
+        } catch (e) {
+        }
+        return null;
+      },
+      setStorage(key, value) {
+        try {
+          if (isWechat && wx && typeof wx.setStorageSync === "function") {
+            wx.setStorageSync(key, value);
+            return;
+          }
+          if (typeof window !== "undefined" && window.localStorage) {
+            window.localStorage.setItem(key, value);
+          }
+        } catch (e) {
+        }
       }
     };
   }
@@ -1589,36 +1614,36 @@
     {
       id: "orange",
       stage: 1,
-      name: "\u5927\u6A58\xB7\u5E72\u996D\u738B",
-      title: "\u7B2C 1 \u5173 \xB7 \u8D2A\u5403\u6A58\u732B",
+      name: "\u5927\u6A58",
+      title: "\u7B2C 1 \u5173 \xB7 \u5E72\u996D\u738B",
       tagline: "\u5341\u53EA\u6A58\u732B\u4E5D\u53EA\u80D6\uFF0C\u89C1\u6A58\u5C31\u62A2\uFF01",
-      maxHp: 75,
+      maxHp: 65,
       skillPeriod: 0,
-      traitShort: "\u4E13\u62A2\u6A58\u732B \xB7 \u6BCF\u6D881\u53EA\u6A58\u732B\u56DE1\u8840(\u4E0A\u9650+8)",
+      traitShort: "\u4E13\u62A2\u6A58\u732B \xB7 \u6D88\u6A58\u56DE\u8840",
       accentColor: "#e67e22",
       barFillColor: "#ffd199"
     },
     {
       id: "cow",
       stage: 2,
-      name: "\u5976\u725B\u732B\xB7\u5348\u591C\u53D1\u766B\u738B",
-      title: "\u7B2C 2 \u5173 \xB7 \u732B\u4E2D\u54C8\u58EB\u5947",
+      name: "\u5976\u725B\u732B",
+      title: "\u7B2C 2 \u5173 \xB7 \u5348\u591C\u53D1\u766B\u738B",
       tagline: "\u51CC\u6668\u4E09\u70B9\u8DD1\u9177\uFF0C\u89C1\u5927\u732B\u5C31\u70B8\uFF01",
       maxHp: 95,
       skillPeriod: 2,
-      traitShort: "\u4E13\u70B8\u5927\u732B \xB7 \u6BCF2\u56DE\u5408\u8DD1\u9177\u628A1\u53EA\u5C0F\u732B\u53D8\u5927\u732B",
+      traitShort: "\u4E13\u70B8\u5927\u732B \xB7 \u6BCF2\u56DE\u5408\u9020\u5927\u732B",
       accentColor: "#3d383b",
       barFillColor: "#cbd5e1"
     },
     {
       id: "hakimi",
       stage: 3,
-      name: "\u54C8\u57FA\u7C73\xB7\u732B\u738B\u672C\u5C0A",
+      name: "\u54C8\u57FA\u7C73",
       title: "\u7B2C 3 \u5173 \xB7 \u7EC8\u6781\u732B\u738B",
       tagline: "\u4F18\u96C5\u538B\u8FEB\u611F\uFF0C\u5168\u573A\u6211\u8BF4\u4E86\u7B97\uFF01",
       maxHp: 120,
       skillPeriod: 2,
-      traitShort: "\u9AD8\u4F24\u62A2\u7206 \xB7 \u6BCF2\u56DE\u5408\u54C8\u6C14\u53E08\u76FE+\u90201\u5927\u732B",
+      traitShort: "\u9AD8\u4F24\u62A2\u7206 \xB7 \u6BCF2\u56DE\u5408\u53E0\u76FE\u9020\u5927\u732B",
       accentColor: "#c0392b",
       barFillColor: "#f5b7c8"
     }
@@ -1629,6 +1654,9 @@
       id: "chain_detonator",
       branch: "blast",
       branchLabel: "\u7206\u7834\u6D41",
+      role: "attack",
+      roleLabel: "\u653B\u51FB",
+      roleColor: "#e54d42",
       name: "\u8FDE\u73AF\u96F7\u7BA1",
       shortDesc: "\u4E8C\u6B21\u5F15\u7206\u6BCF\u6CE2 +5 \u4F24",
       detailDesc: "\u89E6\u53D1\u8FDE\u9501\u4E8C\u6B21\u5F15\u7206\uFF08Wave 1+\uFF09\u65F6\uFF0C\u6BCF\u591A 1 \u6CE2\u989D\u5916\u9020\u6210 +5 \u70B9\u7206\u7834\u4F24\u5BB3\u3002",
@@ -1638,8 +1666,11 @@
       id: "wide_overdrive",
       branch: "blast",
       branchLabel: "\u7206\u7834\u6D41",
+      role: "attack",
+      roleLabel: "\u653B\u51FB",
+      roleColor: "#e54d42",
       name: "\u8FC7\u8F7D\u5BBD\u5149\u675F",
-      shortDesc: "\u5927\u732B\u5149\u675F\u5C04\u7A0B +1",
+      shortDesc: "\u5927\u732B\u5149\u675F\u5C04\u7A0B +1 \u683C",
       detailDesc: "\u4F60\u7684 2 \u7EA7\u5927\u732B\u5BBD\u5149\u675F\u5C04\u7A0B +1\uFF08\u6700\u5927\u5C04\u7A0B\u63D0\u5347\u81F3 5 \u683C\uFF09\uFF0C\u8F7B\u677E\u5F15\u71C3\u5168\u573A\u3002",
       badgeColor: "#ff8787"
     },
@@ -1647,6 +1678,9 @@
       id: "aftershock_paw",
       branch: "blast",
       branchLabel: "\u7206\u7834\u6D41",
+      role: "attack",
+      roleLabel: "\u653B\u51FB",
+      roleColor: "#e54d42",
       name: "\u4F59\u9707\u732B\u722A",
       shortDesc: "\u6BCF\u6CE2\u7206\u53D1 +3 \u7A7F\u76FE\u771F\u4F24",
       detailDesc: "\u4F60\u89E6\u53D1\u7684\u6BCF\u6B21\u7206\u53D1\u7ED3\u675F\u540E\uFF0C\u8FFD\u52A0\u300C\u7206\u53D1\u6CE2\u6570 \xD7 3\u300D\u70B9\u65E0\u89C6\u62A4\u76FE\u7684\u4F59\u9707\u771F\u4F24\u3002",
@@ -1657,8 +1691,11 @@
       id: "paw_shield",
       branch: "merge",
       branchLabel: "\u5408\u6210\u6D41",
+      role: "defense",
+      roleLabel: "\u9632\u5FA1",
+      roleColor: "#2b7de9",
       name: "\u8089\u57AB\u62A4\u76FE",
-      shortDesc: "\u5408\u5927\u732B +6 \u76FE \xB7 \u5408\u70AB\u5F69 +15 \u76FE",
+      shortDesc: "\u5408\u5927\u732B +6 \u76FE \xB7 \u70AB\u5F69 +15",
       detailDesc: "\u6BCF\u5408\u6210 1 \u53EA 2 \u7EA7\u5927\u732B\u83B7\u5F97 +6 \u62A4\u76FE\uFF0C\u5408\u6210 3 \u7EA7\u70AB\u5F69\u732B\u83B7\u5F97 +15 \u62A4\u76FE\u3002",
       badgeColor: "#f5b82e"
     },
@@ -1666,8 +1703,11 @@
       id: "double_kibble",
       branch: "merge",
       branchLabel: "\u5408\u6210\u6D41",
+      role: "attack",
+      roleLabel: "\u653B\u51FB",
+      roleColor: "#e54d42",
       name: "\u53CC\u500D\u732B\u7CAE",
-      shortDesc: "\u5408\u6210\u57FA\u7840\u4F24\u5BB3\u7FFB\u500D",
+      shortDesc: "\u5408\u6210\u4F24\u5BB3\u7FFB\u500D",
       detailDesc: "\u4F60\u7684\u7EAF\u5C0F\u732B\u5408\u6210\u4E0E\u5168 2 \u661F\u5408\u6210\u9020\u6210\u7684\u57FA\u7840\u4F24\u5BB3\u7FFB\u500D\uFF083 \u8FDE 4 \u4F24\uFF0C\u4E09 2 \u661F 12 \u4F24\uFF09\u3002",
       badgeColor: "#f59f00"
     },
@@ -1675,6 +1715,9 @@
       id: "calm_defuse",
       branch: "merge",
       branchLabel: "\u5408\u6210\u6D41",
+      role: "defense",
+      roleLabel: "\u9632\u5FA1",
+      roleColor: "#2b7de9",
       name: "\u4EE5\u5C0F\u535A\u5927",
       shortDesc: "\u5408\u6210\u540E\u4E0B\u56DE\u5408\u51CF\u4F24 30%",
       detailDesc: "\u672C\u56DE\u5408\u53EA\u8981\u5408\u6210\u51FA\u5927\u732B\u6216\u70AB\u5F69\u732B\uFF0C\u4E0B\u4E2A Boss \u56DE\u5408\u4F60\u53D7\u5230\u7684\u4F24\u5BB3\u51CF\u514D 30%\u3002",
@@ -1684,8 +1727,11 @@
       id: "whisker_radar",
       branch: "merge",
       branchLabel: "\u5408\u6210\u6D41",
+      role: "utility",
+      roleLabel: "\u8F85\u52A9",
+      roleColor: "#8b5cf6",
       name: "\u732B\u987B\u96F7\u8FBE",
-      shortDesc: "\u53EF\u5408\u6210/\u5F15\u7206\u732B\u54AA\u6325\u722A\u63D0\u793A",
+      shortDesc: "\u53EF\u5408\u6210\u732B\u54AA\u6325\u722A\u63D0\u793A",
       detailDesc: "\u611F\u77E5\u68CB\u76D8\u52A8\u6001\uFF1A\u53EF\u5F15\u7206\u5927\u732B\u6216\u53EF\u5408\u6210\u7684\u732B\u54AA\u4F1A\u671D\u642D\u6863\u6325\u722A\u62DB\u624B\u63D0\u793A\u4EA4\u6362\u3002",
       badgeColor: "#f59e0b"
     },
@@ -1694,8 +1740,11 @@
       id: "gravity_vortex",
       branch: "collapse",
       branchLabel: "\u6536\u7F29\u6D41",
+      role: "attack",
+      roleLabel: "\u653B\u51FB",
+      roleColor: "#e54d42",
       name: "\u5F15\u529B\u6F29\u6DA1",
-      shortDesc: "\u6536\u7F29\u6BCF\u79FB\u52A8 1 \u732B +1 \u4F24",
+      shortDesc: "\u6536\u7F29\u6BCF\u79FB 1 \u732B +1 \u4F24",
       detailDesc: "\u7EAF\u5408\u6210\u89E6\u53D1\u5B9A\u5411\u6536\u7F29\u65F6\uFF0C\u6BCF\u6709 1 \u53EA\u732B\u53D1\u751F\u4F4D\u79FB\uFF0C\u989D\u5916\u5BF9 Boss \u9020\u6210 +1 \u70B9\u6324\u538B\u4F24\u5BB3\u3002",
       badgeColor: "#38b583"
     },
@@ -1703,8 +1752,11 @@
       id: "catnip_combo",
       branch: "collapse",
       branchLabel: "\u6536\u7F29\u6D41",
+      role: "attack",
+      roleLabel: "\u653B\u51FB",
+      roleColor: "#e54d42",
       name: "\u732B\u8584\u8377\u8FDE\u51FB",
-      shortDesc: "\u8FDE\u9501\u52A0\u4F24\u7FFB\u500D (+4/+8/+12)",
+      shortDesc: "\u591A\u8F6E\u8FDE\u9501\u52A0\u4F24\u7FFB\u500D",
       detailDesc: "\u4F60\u7684\u591A\u8F6E\u8FDE\u9501\u52A0\u4F24\u7FFB\u500D\uFF0C\u7B2C 2/3/4 \u8F6E\u989D\u5916\u4F24\u5BB3\u53D8\u4E3A +4 / +8 / +12\u3002",
       badgeColor: "#20c997"
     },
@@ -1712,8 +1764,11 @@
       id: "combo_heal",
       branch: "collapse",
       branchLabel: "\u6536\u7F29\u6D41",
+      role: "heal",
+      roleLabel: "\u56DE\u8840",
+      roleColor: "#1fa866",
       name: "\u987A\u624B\u7275\u732B",
-      shortDesc: "\u8FDE\u9501\u7B2C 2 \u8F6E\u8D77\u6BCF\u6B21\u56DE 5 \u8840",
+      shortDesc: "\u89E6\u53D1\u8FDE\u9501\u6BCF\u8F6E\u56DE 5 \u8840",
       detailDesc: "\u4F60\u901A\u8FC7\u6536\u7F29\u89E6\u53D1\u7B2C 2 \u8F6E\u53CA\u4EE5\u4E0A\u8FDE\u9501\u65F6\uFF0C\u6BCF\u8F6E\u56DE\u590D\u81EA\u8EAB +5 \u751F\u547D\uFF08\u4E0D\u8D85\u4E0A\u9650\uFF09\u3002",
       badgeColor: "#12b886"
     }
@@ -1737,22 +1792,113 @@
       bossTurnsTaken: 0,
       relics: [],
       calmDefuseActive: false,
-      phase: "opening_reward",
-      rewardChoices: rollRelicChoices([], seed + 313),
+      phase: "battle",
+      rewardChoices: [],
       totalTurns: 0,
       bestTurnDamage: 0,
       defeatedBosses: []
     };
   }
+  function seedOpeningBigCats(state, seed) {
+    var _a;
+    const rng = new SeededRng(seed + 4099);
+    const upgraded = [];
+    const swaps = findLegalSwaps(state);
+    if (swaps.length > 0) {
+      const startIdx = rng.randiRange(0, swaps.length - 1);
+      for (let offset = 0; offset < swaps.length && upgraded.length < 1; offset++) {
+        const [a, b] = swaps[(startIdx + offset) % swaps.length];
+        const prev = previewSwap(state, a, b);
+        if (!prev.valid || !prev.event || prev.event.lines.length === 0) continue;
+        const candidates = [a, b, ...prev.event.lines[0].cells];
+        for (const cell of candidates) {
+          const cat = state.board[cell];
+          if (!cat || cat.level !== 1) continue;
+          cat.level = 2;
+          if (matches(state.board).length === 0) {
+            const check = previewSwap(state, a, b);
+            if (check.valid && check.event && check.event.waves.length > 0) {
+              upgraded.push(cell);
+              break;
+            }
+          }
+          cat.level = 1;
+        }
+      }
+    }
+    const innerCells = [];
+    for (let q = 1; q <= 5; q++) {
+      for (let r = 1; r <= 5; r++) {
+        const c = index(q, r);
+        if (c >= 0 && !upgraded.includes(c) && ((_a = state.board[c]) == null ? void 0 : _a.level) === 1) {
+          innerCells.push(c);
+        }
+      }
+    }
+    for (let i = innerCells.length - 1; i > 0; i--) {
+      const j = rng.randiRange(0, i);
+      const tmp = innerCells[i];
+      innerCells[i] = innerCells[j];
+      innerCells[j] = tmp;
+    }
+    for (const cell of innerCells) {
+      if (upgraded.length >= 2) break;
+      const cat = state.board[cell];
+      if (!cat || cat.level !== 1) continue;
+      cat.level = 2;
+      if (matches(state.board).length === 0 && findLegalSwaps(state).length > 0) {
+        upgraded.push(cell);
+      } else {
+        cat.level = 1;
+      }
+    }
+  }
   function createStageGameState(run) {
     const boss = getBossProfile(run.stageIndex);
     const stageSeed = run.seed + run.stageIndex * 9973 + 17;
     const st = newGame(stageSeed);
+    if (run.stageIndex === 0) {
+      seedOpeningBigCats(st, stageSeed);
+    }
     st.hp = [run.playerHp, boss.maxHp];
     st.maxHp = [run.playerMaxHp, boss.maxHp];
     st.shield = [run.playerShield, run.bossShield];
     st.player = 0;
     return st;
+  }
+  function createTutorialScenario(step) {
+    if (step === 0) {
+      const st2 = loadFixture(0);
+      st2.hp = [100, 30];
+      st2.maxHp = [100, 30];
+      st2.shield = [0, 0];
+      st2.player = 0;
+      st2.fixture = void 0;
+      return {
+        step: 0,
+        totalSteps: 2,
+        badge: "\u6559\u5B66 1/2",
+        prompt: "\u62D6\u52A8\u732B\u732B\uFF0C3 \u8FDE\u5408\u6210\u5927\u732B\uFF01",
+        successBanner: "\u68D2\uFF01\u5408\u51FA 2 \u7EA7\u5927\u732B\uFF01",
+        state: st2,
+        guideSwap: st2.suggested
+      };
+    }
+    const st = loadFixture(7);
+    st.hp = [100, 30];
+    st.maxHp = [100, 30];
+    st.shield = [0, 0];
+    st.player = 0;
+    st.fixture = void 0;
+    return {
+      step: 1,
+      totalSteps: 2,
+      badge: "\u6559\u5B66 2/2",
+      prompt: "\u7528\u5927\u732B 3 \u8FDE\uFF0C\u8FDE\u9501\u8F70\u70B8\u5168\u573A\uFF01",
+      successBanner: "\u5B66\u4F1A\u4E86\uFF01\u6B63\u5F0F\u5F00\u6253\uFF01",
+      state: st,
+      guideSwap: st.suggested
+    };
   }
   function hasHintRelic(relics) {
     return relics.includes("whisker_radar");
@@ -1785,7 +1931,7 @@
     probe.winner = -1;
     const swaps = findLegalSwaps(probe);
     const skillReady = isBossSkillDue(boss, bossTurnsTaken);
-    const skillText = boss.id === "orange" ? "\u88AB\u52A8\uFF1A\u6D88\u6A58\u732B\u56DE\u8840" : boss.id === "cow" ? skillReady ? "\u672C\u56DE\u5408\u8DD1\u9177\uFF1A\u53D8 1 \u53EA\u5927\u732B" : "\u8DD1\u9177\u5145\u80FD\u4E2D\uFF08\u4E0B\u56DE\u5408\u53D1\u766B\uFF09" : skillReady ? "\u672C\u56DE\u5408\u54C8\u6C14\uFF1A+8 \u76FE + \u9020 1 \u5927\u732B" : "\u732B\u738B\u84C4\u529B\u4E2D\uFF08\u4E0B\u56DE\u5408\u54C8\u6C14\uFF09";
+    const skillText = boss.id === "orange" ? "\u6D88\u6A58\u56DE\u8840" : boss.id === "cow" ? skillReady ? "\u672C\u56DE\u5408\u9020\u5927\u732B" : "\u4E0B\u56DE\u5408\u9020\u5927\u732B" : skillReady ? "\u672C\u56DE\u5408+8\u76FE\u9020\u5927\u732B" : "\u4E0B\u56DE\u5408\u53E0\u76FE\u9020\u5927\u732B";
     if (swaps.length === 0) {
       return {
         swap: null,
@@ -1845,16 +1991,15 @@
       const pick = (state.turn * 7 + bossTurnsTaken * 3 + state.seed) % pool;
       chosen = candidates[pick];
     }
-    let actionDesc = "\u51C6\u5907\u53D1\u8D77\u8FDB\u653B";
+    let actionDesc = "\u51C6\u5907\u8FDB\u653B";
     if (boss.id === "orange" && chosen.orangeCount > 0) {
-      const estHeal = Math.min(8, chosen.orangeCount);
-      actionDesc = chosen.hasBlast ? `\u62A2\u7206\u6A58\u732B\u5927\u62DB\uFF01(\u7EA6 ${chosen.damage} \u4F24 + \u56DE ${estHeal} \u8840)` : `\u62A2\u5403\u6A58\u732B\u5408\u5927\u732B (\u7EA6 ${chosen.damage} \u4F24 + \u56DE ${estHeal} \u8840)`;
+      actionDesc = chosen.hasBlast ? `\u5927\u6A58\u60F3\u62A2\u7206\uFF01\u9884\u8BA1 ${chosen.damage} \u4F24` : `\u5927\u6A58\u76EF\u4E0A\u6A58\u732B \xB7 \u9884\u8BA1 ${chosen.damage} \u4F24`;
     } else if (chosen.hasBlast) {
-      actionDesc = `\u9501\u5B9A\u62A2\u7206\u4F60\u7684\u5927\u732B\uFF01(\u7EA6 ${chosen.damage} \u4F24)`;
+      actionDesc = `${boss.name}\u60F3\u62A2\u7206\u5927\u732B\uFF01\u9884\u8BA1 ${chosen.damage} \u4F24`;
     } else if (chosen.hasMerge) {
-      actionDesc = `\u51C6\u5907\u5408\u6210\u5927\u732B\u57CB\u96F7 (\u7EA6 ${chosen.damage} \u4F24)`;
+      actionDesc = `${boss.name}\u60F3\u5408\u5927\u732B \xB7 \u9884\u8BA1 ${chosen.damage} \u4F24`;
     } else {
-      actionDesc = `\u9884\u8BA1\u9020\u6210 ${chosen.damage} \u4F24`;
+      actionDesc = `${boss.name}\u51C6\u5907\u51FA\u624B \xB7 \u9884\u8BA1 ${chosen.damage} \u4F24`;
     }
     return {
       swap: chosen.swap,
@@ -1904,7 +2049,7 @@
         cat.level = 1;
       }
     }
-    const banner = boss.id === "cow" ? upgradedCell >= 0 ? "\u5976\u725B\u732B\u5348\u591C\u8DD1\u9177\uFF01\u628A 1 \u53EA\u5C0F\u732B\u5413\u6210\u4E86 2 \u7EA7\u5927\u732B\uFF01" : "\u5976\u725B\u732B\u5348\u591C\u8DD1\u9177\u6251\u4E86\u4E2A\u7A7A\uFF01" : upgradedCell >= 0 ? `\u54C8\u57FA\u7C73\u732B\u738B\u54C8\u6C14\uFF01\u83B7\u5F97 +${shieldGained} \u62A4\u76FE\u5E76\u50AC\u751F 1 \u53EA\u5927\u732B\uFF01` : `\u54C8\u57FA\u7C73\u732B\u738B\u54C8\u6C14\uFF01\u83B7\u5F97 +${shieldGained} \u62A4\u76FE\uFF01`;
+    const banner = boss.id === "cow" ? upgradedCell >= 0 ? "\u5976\u725B\u8DD1\u9177\uFF01\u9020\u51FA 1 \u53EA\u5927\u732B" : "\u5976\u725B\u8DD1\u9177\u6251\u7A7A\u4E86\uFF01" : upgradedCell >= 0 ? `\u54C8\u57FA\u7C73\u54C8\u6C14\uFF01+${shieldGained} \u76FE\u5E76\u9020\u5927\u732B` : `\u54C8\u57FA\u7C73\u54C8\u6C14\uFF01\u83B7\u5F97 +${shieldGained} \u76FE`;
     return {
       triggered: true,
       banner,
@@ -2048,7 +2193,15 @@
   var NEST_RIM_COLORS = ["#ffd8ad", "#cde2f5", "#f6e2a1", "#ffd3df", "#cdebd7"];
   var NEST_EMPTY_RIM = "#f4e2c8";
   var NEST_BIG_RIM = "#ffea9c";
+  var NEST_LIGHT_STEP = 0.1;
+  var NEST_MATCH_RIM = "#ffb938";
+  var NEST_CENTER_RIM = "#5fd394";
   var WAVE_COLORS = ["#ff9852", "#ff4d8d", "#a855f7", "#ec4899"];
+  var TUTORIAL_DONE_STORAGE_KEY = "cat_boom_tutorial_v1_done";
+  function comboDamageTier(dmg) {
+    return dmg >= 40 ? 3 : dmg >= 20 ? 2 : dmg >= 10 ? 1 : 0;
+  }
+  var COMBO_TIER_COLORS = ["#f97316", "#ef4444", "#e11d48", "#a855f7"];
   function easeCubicInOut(t) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
@@ -2140,6 +2293,10 @@
       this.preview = { valid: false };
       this.currentEvent = null;
       this.activeEventPhase = "none";
+      this.phaseStart = 0;
+      // 当前演出阶段开始时刻（用于猫窝依次亮起）
+      this.matchOrder = /* @__PURE__ */ new Map();
+      // 本轮匹配格 → 亮起顺序（合成中心最后）
       this.activeWaveIndex = -1;
       this.statusText = "";
       this.statusIcon = null;
@@ -2157,9 +2314,9 @@
       this.grabElapsed = 0;
       // 模式与肉鸽闯关状态
       this.gameMode = "roguelike";
-      this.bossIntent = null;
       this.bossHighlightSwap = null;
       this.hintSet = { highValue: [], fallback: null };
+      this.tutorial = null;
       // 控制选项
       this.busy = false;
       this.speed = 1;
@@ -2169,6 +2326,7 @@
       this.showRulesModal = false;
       this.showDebugPanel = false;
       this.showRelicsModal = false;
+      this.expandedRewardRelicId = null;
       // 渲染实体与动画
       this.visuals = /* @__PURE__ */ new Map();
       this.ambientAnims = [];
@@ -2177,6 +2335,23 @@
       this.ghosts = [];
       this.shockwaves = [];
       this.floatings = [];
+      this.flyers = [];
+      this.sparks = [];
+      // 血条显示层：与逻辑 state.hp 分离，伤害猫抵达时才扣减
+      this.dispHp = null;
+      this.trailHp = [0, 0];
+      this.trailHold = [0, 0];
+      this.dispShield = [0, 0];
+      this.inFlightHp = [0, 0];
+      this.inFlightShield = [0, 0];
+      this.barHit = [0, 0];
+      // 回合切换演出：过场色带、阵营氛围色、Boss 思考与瞄准
+      this.turnIntro = null;
+      this.turnTint = 0;
+      // 0=玩家1/你，1=对手/Boss
+      this.bossThink = 0;
+      // Boss 头像思考蹦跳 1→0
+      this.bossAim = null;
       this.comboTracker = null;
       this.tweens = [];
       this.shakeOffsetX = 0;
@@ -2193,7 +2368,12 @@
       this.assets = loadGameAssets();
       this.computeViewport();
       this.bindInputs();
-      this.startNewRoguelikeRun(Math.floor(Date.now() % 1e6));
+      const tutorialDone = this.platform.getStorage(TUTORIAL_DONE_STORAGE_KEY) === "1";
+      if (!tutorialDone) {
+        this.startTutorial();
+      } else {
+        this.startNewRoguelikeRun(Math.floor(Date.now() % 1e6));
+      }
     }
     start() {
       this.lastFrameMs = Date.now();
@@ -2256,26 +2436,57 @@
     isInputBlocked() {
       if (this.busy) return true;
       if (this.showRulesModal || this.showDebugPanel || this.showRelicsModal) return true;
+      if (this.tutorial) {
+        return this.state.winner >= 0;
+      }
       if (this.gameMode === "roguelike") {
         if (this.run.phase !== "battle" || this.state.player !== 0) return true;
       }
       return this.state.winner >= 0;
     }
     getCurrentModifiers(forPlayer) {
-      if (this.gameMode !== "roguelike") return void 0;
+      if (this.tutorial || this.gameMode !== "roguelike") return void 0;
       return forPlayer === 0 ? buildPlayerModifiers(this.run.relics) : buildBossModifiers(this.run);
+    }
+    startTutorial() {
+      if (this.busy) return;
+      this.gameMode = "roguelike";
+      this.showRulesModal = false;
+      this.showDebugPanel = false;
+      this.showRelicsModal = false;
+      this.expandedRewardRelicId = null;
+      this.run = createRoguelikeRun(Math.floor(Date.now() % 1e6));
+      this.loadTutorialStep(0);
+    }
+    loadTutorialStep(step) {
+      const scenario = createTutorialScenario(step);
+      this.tutorial = scenario;
+      this.bossHighlightSwap = null;
+      this.comboTracker = null;
+      this.loadState(scenario.state);
+      this.hintSet = { highValue: [scenario.guideSwap], fallback: scenario.guideSwap };
+      this.setStatus(scenario.prompt);
+    }
+    finishTutorial(markCompleted) {
+      if (markCompleted) {
+        this.platform.setStorage(TUTORIAL_DONE_STORAGE_KEY, "1");
+      }
+      this.tutorial = null;
+      this.busy = false;
+      this.startNewRoguelikeRun(
+        Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999)
+      );
     }
     startNewRoguelikeRun(seed) {
       if (this.busy) return;
+      this.tutorial = null;
       this.gameMode = "roguelike";
       this.showDebugPanel = false;
       this.showRelicsModal = false;
+      this.expandedRewardRelicId = null;
       this.comboTracker = null;
       this.run = createRoguelikeRun(seed);
-      const openingState = createStageGameState(this.run);
-      this.loadState(openingState);
-      this.bossIntent = null;
-      this.setStatus("\u732B\u795E\u8D77\u624B\u793C\uFF1A\u5148\u9009 1 \u4E2A\u521D\u59CB\u6D41\u6D3E\u795D\u798F\u5F00\u542F\u95EF\u5173\uFF01", "gift");
+      this.startCurrentStage();
     }
     startCurrentStage() {
       this.run.bossShield = 0;
@@ -2287,38 +2498,35 @@
       const stageState = createStageGameState(this.run);
       this.loadState(stageState);
       const boss = getBossProfile(this.run.stageIndex);
-      this.showBanner(`\u7B2C ${boss.stage}/3 \u5173 \xB7 ${boss.name} \u767B\u573A\uFF01`, 1.8);
+      this.showBanner(`\u7B2C ${boss.stage}/3 \u5173 \xB7 ${boss.name} \u767B\u573A\uFF01`, 1.4);
       this.refreshPlayerTurnGuides();
     }
     chooseRewardRelic(id) {
-      if (this.gameMode !== "roguelike" || this.run.phase !== "opening_reward" && this.run.phase !== "reward") {
+      if (this.gameMode !== "roguelike" || this.run.phase !== "reward") {
         return;
       }
-      const isOpening = this.run.phase === "opening_reward";
       this.run.relics.push(id);
       this.run.rewardChoices = [];
-      if (!isOpening) {
-        this.run.stageIndex += 1;
-      }
+      this.expandedRewardRelicId = null;
+      this.run.stageIndex += 1;
       this.sound.playChime();
       this.startCurrentStage();
     }
     refreshPlayerTurnGuides() {
+      if (this.tutorial) {
+        this.hintSet = { highValue: [this.tutorial.guideSwap], fallback: this.tutorial.guideSwap };
+        return;
+      }
       const canShowHints = this.gameMode === "roguelike" && hasHintRelic(this.run.relics);
       this.hintSet = canShowHints ? computeHintSwaps(this.state, this.getCurrentModifiers(0)) : { highValue: [], fallback: null };
       if (this.gameMode === "roguelike" && this.run.phase === "battle" && this.state.winner < 0) {
-        const boss = getBossProfile(this.run.stageIndex);
-        const mult = this.run.calmDefuseActive ? 0.7 : 1;
-        this.bossIntent = computeBossIntent(this.state, boss, this.run.bossTurnsTaken, mult);
-        this.setStatus(`${boss.name}\u610F\u56FE\uFF1A${this.bossIntent.headline}`);
-      } else {
-        this.bossIntent = null;
+        this.setStatus("\u8F6E\u5230\u4F60\u4E86\uFF01\u62D6\u52A8\u732B\u732B 3 \u8FDE");
       }
     }
     startNewGame(seed) {
       if (this.busy) return;
+      this.tutorial = null;
       this.gameMode = "pvp";
-      this.bossIntent = null;
       this.bossHighlightSwap = null;
       this.showRelicsModal = false;
       this.loadState(newGame(seed));
@@ -2338,6 +2546,10 @@
       this.activeEventPhase = "none";
       this.activeWaveIndex = -1;
       this.shockwaves = [];
+      this.clearDamageFlyers();
+      this.turnIntro = null;
+      this.bossAim = null;
+      this.bossThink = 0;
       this.comboTracker = null;
       this.legalCount = findLegalSwaps(this.state).length;
       this.ambientAnims = [];
@@ -2363,6 +2575,10 @@
       this.activeEventPhase = "none";
       this.activeWaveIndex = -1;
       this.shockwaves = [];
+      this.clearDamageFlyers();
+      this.turnIntro = null;
+      this.bossAim = null;
+      this.bossThink = 0;
       this.comboTracker = null;
       this.legalCount = findLegalSwaps(this.state).length;
       this.ambientAnims = [];
@@ -2511,14 +2727,14 @@
           return;
         }
         if (!validSwap(this.state, this.selected, upCell)) {
-          this.setStatus("\u8FD9\u6B21\u4EA4\u6362\u6CA1\u6709\u5F62\u6210\u540C\u8272\u76F4\u7EBF\u4E09\u8FDE\uFF0C\u6362\u4E00\u53EA\u8BD5\u8BD5~");
+          this.setStatus("\u9700\u8981 3 \u53EA\u540C\u8272\u8FDE\u6210\u76F4\u7EBF\u54E6");
           this.clearPreview();
           return;
         }
         this.setPreview(this.selected, upCell);
         this.hoverPreviewed = false;
         const dmg = (_b = (_a = this.preview.event) == null ? void 0 : _a.damage) != null ? _b : 0;
-        this.setStatus(`\u9996\u8F6E\u9884\u8BA1 ${dmg} \u4F24\u5BB3 \xB7 \u518D\u70B9\u4E00\u6B21\u786E\u8BA4\u4EA4\u6362`);
+        this.setStatus(`\u9884\u8BA1 ${dmg} \u4F24 \xB7 \u518D\u70B9\u4E00\u6B21\u786E\u8BA4`);
       });
       this.platform.onPointerHover((sx, sy) => {
         if (this.isInputBlocked()) {
@@ -2592,25 +2808,28 @@
         this.stepWaitResolver = resolve;
       });
     }
-    async animateBoardPositions(board, duration) {
-      const targets = [];
-      for (let cell = 0; cell < board.length; cell++) {
+    async animateSwapPair(board, a, b, duration, arc, lift) {
+      const items = [];
+      [a, b].forEach((cell, i) => {
         const cat = board[cell];
-        if (!cat) continue;
-        const vis = this.visuals.get(cat.id);
-        if (!vis) continue;
+        const vis = cat ? this.visuals.get(cat.id) : void 0;
+        if (!vis) return;
         const tp = this.cellPoint(cell);
-        if (Math.hypot(tp.x - vis.x, tp.y - vis.y) > 0.5) {
-          targets.push({ vis, sx: vis.x, sy: vis.y, tx: tp.x, ty: tp.y });
-        }
-      }
-      if (targets.length === 0) return;
+        items.push({ vis, sx: vis.x, sy: vis.y, tx: tp.x, ty: tp.y, side: i === 0 ? 1 : -1 });
+      });
+      if (items.length === 0) return;
       await this.runTween(duration, "cubicInOut", (t) => {
-        for (const item of targets) {
-          item.vis.x = item.sx + (item.tx - item.sx) * t;
-          item.vis.y = item.sy + (item.ty - item.sy) * t;
+        const bump = Math.sin(Math.PI * t);
+        for (const it of items) {
+          const dx = it.tx - it.sx;
+          const dy = it.ty - it.sy;
+          const len = Math.hypot(dx, dy) || 1;
+          it.vis.x = it.sx + dx * t + -dy / len * arc * bump * it.side;
+          it.vis.y = it.sy + dy * t + dx / len * arc * bump * it.side;
+          it.vis.scale = 1 + lift * bump;
         }
       });
+      for (const it of items) it.vis.scale = 1;
     }
     spawnWaveBurstEffects(event, sources, cells, waveIndex) {
       if (cells.length === 0) return;
@@ -2628,7 +2847,7 @@
           maxLife: ringLife
         });
       }
-      const count = Math.min(cells.length * 2, 24);
+      const count = Math.min(cells.length, 10);
       for (let k = 0; k < count; k++) {
         const cell = cells[k % cells.length];
         const orig = event.before[cell];
@@ -2676,15 +2895,266 @@
         maxLife
       });
     }
-    spawnFloatingDamage(event, attacker) {
-      const y = attacker === 0 ? 118 : 1074;
-      const text = event.shieldBlocked > 0 ? `\u2212${event.damage} (\u76FE\u6321${event.shieldBlocked})` : event.trueDamage > 0 ? `\u2212${event.damage} (\u771F\u4F24${event.trueDamage})` : `\u2212${event.damage}`;
-      this.spawnFloatingText(text, y, event.trueDamage > 0 ? "#9333ea" : "#e54d42");
+    /** 血条几何（与 drawPlayerBar 保持一致） */
+    barRect(player) {
+      return { x: 96, y: player === 1 ? 60 : 1070, w: player === 1 ? 448 : 596, h: 58 };
+    }
+    maxHpOf(player) {
+      return this.state.maxHp ? this.state.maxHp[player] : HP;
+    }
+    /** 伤害猫追踪目标：护盾徽章中心，或当前显示血量的末端 */
+    flyerTarget(f) {
+      const r = this.barRect(f.defender);
+      if (f.toShield) return { x: r.x + r.w - 9 - 44, y: r.y + r.h / 2 };
+      const hp = this.dispHp ? this.dispHp[f.defender] : this.state.hp[f.defender];
+      const ratio = Math.max(0, Math.min(1, hp / Math.max(1, this.maxHpOf(f.defender))));
+      return { x: r.x + Math.max(26, r.w * ratio - 10), y: r.y + r.h / 2 };
+    }
+    clearDamageFlyers() {
+      this.flyers = [];
+      this.sparks = [];
+      this.inFlightHp = [0, 0];
+      this.inFlightShield = [0, 0];
+    }
+    /** 从被炸/被合成的格子取出伤害猫起点（数量不足时复用格子，营造密集弹幕感） */
+    flyerStarts(event, cells, min, max, at) {
+      const valid = cells.filter((c) => event.before[c]);
+      if (valid.length === 0) return [];
+      const n = Math.max(min, Math.min(max, valid.length));
+      const starts = [];
+      for (let k = 0; k < n; k++) {
+        const cell = valid[k % valid.length];
+        const cat = event.before[cell];
+        const p = this.cellPoint(at ? at(cell) : cell);
+        const jitter = k >= valid.length ? 26 : 0;
+        starts.push({
+          x: p.x + (Math.random() - 0.5) * jitter,
+          y: p.y + (Math.random() - 0.5) * jitter,
+          color: cat.color,
+          level: cat.level
+        });
+      }
+      return starts;
+    }
+    /** 把一段扣血/扣盾分给一群伤害猫：逻辑值立即扣减，显示值等猫抵达时才扣减 */
+    launchDamageFlyers(starts, defender, hp, shield, trailColor, popupColor) {
+      this.state.hp[defender] = Math.max(0, this.state.hp[defender] - hp);
+      if (this.state.shield) {
+        this.state.shield[defender] = Math.max(0, this.state.shield[defender] - shield);
+      }
+      if (starts.length === 0 || hp + shield <= 0) return;
+      const n = starts.length;
+      let nShield = 0;
+      if (shield > 0) {
+        nShield = hp > 0 ? Math.max(1, Math.min(n - 1, Math.round(n * shield / (hp + shield)))) : n;
+      }
+      const nHp = n - nShield;
+      const share = (total, m, k) => m <= 0 ? 0 : Math.floor(total / m) + (k < total % m ? 1 : 0);
+      const popupText = [hp > 0 ? `\u2212${hp}` : "", shield > 0 ? `\u76FE\u2212${shield}` : ""].filter(Boolean).join(" ");
+      let si = 0;
+      let hi = 0;
+      for (let i = 0; i < n; i++) {
+        const s = starts[i];
+        const toShield = nShield > 0 && Math.floor((i + 1) * nShield / n) > Math.floor(i * nShield / n);
+        const fHp = toShield ? 0 : share(hp, nHp, hi++);
+        const fShield = toShield ? share(shield, nShield, si++) : nShield === 0 ? i === 0 ? shield : 0 : 0;
+        const angle = Math.random() * Math.PI * 2;
+        const popDist = 40 + Math.random() * 50;
+        this.flyers.push({
+          color: s.color,
+          level: s.level,
+          sx: s.x,
+          sy: s.y,
+          ox: s.x + Math.cos(angle) * popDist,
+          oy: s.y + Math.sin(angle) * popDist,
+          bend: (Math.random() < 0.5 ? -1 : 1) * (110 + Math.random() * 230),
+          x: s.x,
+          y: s.y,
+          scale: 0.5,
+          rot: 0,
+          vRot: (Math.random() - 0.5) * 14,
+          delay: (i * 0.026 + Math.random() * 0.02) / this.speed,
+          elapsed: 0,
+          popDur: 0.16 / this.speed,
+          flyDur: (0.5 + Math.random() * 0.14) / this.speed,
+          defender,
+          hp: fHp,
+          shield: fShield,
+          toShield,
+          trailColor,
+          trail: [],
+          popupText: i === 0 ? popupText : "",
+          popupColor: hp > 0 ? popupColor : "#2563eb"
+        });
+        this.inFlightHp[defender] += fHp;
+        this.inFlightShield[defender] += fShield;
+      }
+    }
+    onFlyerArrive(f, tx, ty) {
+      const d = f.defender;
+      this.inFlightHp[d] = Math.max(0, this.inFlightHp[d] - f.hp);
+      this.inFlightShield[d] = Math.max(0, this.inFlightShield[d] - f.shield);
+      this.barHit[d] = 1;
+      this.trailHold[d] = 0.4 / this.speed;
+      if (f.popupText) {
+        this.spawnFloatingText(f.popupText, d === 1 ? 92 : 1070, f.popupColor);
+      }
+      if (this.sparks.length < 180) {
+        const sparkColors = [f.trailColor, "#ffffff", f.toShield ? "#60a5fa" : "#ffd166"];
+        for (let k = 0; k < 9; k++) {
+          const a = Math.random() * Math.PI * 2;
+          const v = 140 + Math.random() * 260;
+          const maxLife = (0.32 + Math.random() * 0.2) / this.speed;
+          this.sparks.push({
+            x: tx,
+            y: ty,
+            vx: Math.cos(a) * v,
+            vy: Math.sin(a) * v,
+            size: 3 + Math.random() * 5,
+            color: sparkColors[k % sparkColors.length],
+            life: maxLife,
+            maxLife
+          });
+        }
+      }
+    }
+    /** 伤害猫：弹出 → 沿二次贝塞尔弧线加速追踪血条末端 */
+    updateDamageFlyers(dt) {
+      for (let i = this.flyers.length - 1; i >= 0; i--) {
+        const f = this.flyers[i];
+        f.elapsed += dt;
+        const t = f.elapsed - f.delay;
+        if (t < 0) continue;
+        if (t < f.popDur) {
+          const p = 1 - Math.pow(1 - t / f.popDur, 3);
+          f.x = f.sx + (f.ox - f.sx) * p;
+          f.y = f.sy + (f.oy - f.sy) * p;
+          f.scale = 0.5 + 0.3 * p;
+          f.rot += f.vRot * 0.4 * dt;
+        } else {
+          const p = Math.min(1, (t - f.popDur) / f.flyDur);
+          const e = p * p * (1.6 - 0.6 * p);
+          const tg = this.flyerTarget(f);
+          const dx = tg.x - f.ox;
+          const dy = tg.y - f.oy;
+          const len = Math.hypot(dx, dy) || 1;
+          const cx = (f.ox + tg.x) / 2 - dy / len * f.bend;
+          const cy = (f.oy + tg.y) / 2 + dx / len * f.bend;
+          const u = 1 - e;
+          f.x = u * u * f.ox + 2 * u * e * cx + e * e * tg.x;
+          f.y = u * u * f.oy + 2 * u * e * cy + e * e * tg.y;
+          f.scale = 0.8 - 0.46 * e;
+          f.rot += f.vRot * dt;
+          if (p >= 1) {
+            this.onFlyerArrive(f, tg.x, tg.y);
+            this.flyers.splice(i, 1);
+            continue;
+          }
+        }
+        f.trail.push({ x: f.x, y: f.y });
+        if (f.trail.length > 8) f.trail.shift();
+      }
+      for (let i = this.sparks.length - 1; i >= 0; i--) {
+        const s = this.sparks[i];
+        s.life -= dt;
+        if (s.life <= 0) {
+          this.sparks.splice(i, 1);
+          continue;
+        }
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.vx *= 0.9;
+        s.vy = s.vy * 0.9 + 380 * dt;
+      }
+    }
+    /** 显示血量平滑追随「逻辑血量 + 尚在飞行的伤害」，并带延迟残血 */
+    updateHpDisplay(dt) {
+      const shieldOf = (p) => this.state.shield ? this.state.shield[p] : 0;
+      if (!this.dispHp) {
+        this.dispHp = [this.state.hp[0], this.state.hp[1]];
+        this.trailHp = [this.state.hp[0], this.state.hp[1]];
+        this.dispShield = [shieldOf(0), shieldOf(1)];
+      }
+      for (const p of [0, 1]) {
+        const target = Math.max(0, this.state.hp[p] + this.inFlightHp[p]);
+        const cur = this.dispHp[p];
+        let next = cur + (target - cur) * Math.min(1, dt * (target < cur ? 16 : 5));
+        if (Math.abs(target - next) < 0.05) next = target;
+        this.dispHp[p] = next;
+        if (this.trailHold[p] > 0) {
+          this.trailHold[p] -= dt;
+        } else {
+          this.trailHp[p] += (next - this.trailHp[p]) * Math.min(1, dt * 4.5);
+        }
+        if (this.trailHp[p] < next || Math.abs(this.trailHp[p] - next) < 0.05) this.trailHp[p] = next;
+        const sTarget = Math.max(0, shieldOf(p) + this.inFlightShield[p]);
+        let sNext = this.dispShield[p] + (sTarget - this.dispShield[p]) * Math.min(1, dt * 14);
+        if (Math.abs(sTarget - sNext) < 0.05) sNext = sTarget;
+        this.dispShield[p] = sNext;
+        this.barHit[p] = Math.max(0, this.barHit[p] - dt * 3.2);
+      }
+    }
+    renderDamageFlyers(ctx) {
+      for (const f of this.flyers) {
+        if (f.elapsed < f.delay) continue;
+        ctx.save();
+        const n = f.trail.length;
+        ctx.fillStyle = f.trailColor;
+        for (let k = 0; k < n; k++) {
+          const a = (k + 1) / (n + 1);
+          ctx.globalAlpha = a * 0.5;
+          ctx.beginPath();
+          ctx.arc(f.trail[k].x, f.trail[k].y, 5 + 22 * a * f.scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, 44 * f.scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        drawCatSprite(
+          ctx,
+          {
+            x: f.x,
+            y: f.y,
+            colorId: f.color,
+            level: f.level,
+            scale: f.scale,
+            rotation: f.rot,
+            alpha: 1,
+            showBadge: false
+          },
+          this.assets
+        );
+      }
+      for (const s of this.sparks) {
+        const a = Math.max(0, s.life / s.maxLife);
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.fillStyle = s.color;
+        ctx.strokeStyle = INK2;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size * (0.5 + 0.5 * a), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    /** 回合收尾前等伤害猫全部落地（最多等 1.2 秒），避免结算先于扣血出现 */
+    async waitFlyersLanded() {
+      let waited = 0;
+      while (this.flyers.length > 0 && waited < 1.2) {
+        await this.waitSec(0.05);
+        waited += 0.05 / this.speed;
+      }
     }
     pushComboLog(delta, label, color, deltaText) {
       if (!this.comboTracker) return;
       this.comboTracker.totalDamage = Math.max(0, this.comboTracker.totalDamage + delta);
       this.comboTracker.pulse = 1;
+      this.comboTracker.logSlide = 1;
       this.comboTracker.logs.push({
         label,
         deltaText: deltaText != null ? deltaText : delta >= 0 ? `+${delta}` : `${delta}`,
@@ -2694,14 +3164,26 @@
         this.comboTracker.logs.shift();
       }
     }
+    isSameSwapPair(a, b, pair) {
+      return a === pair[0] && b === pair[1] || a === pair[1] && b === pair[0];
+    }
     async submitSwap(a, b, isBossAction = false) {
       if (this.busy && !isBossAction) return;
       if (!validSwap(this.state, a, b)) {
         this.sound.playInvalid();
-        this.setStatus("\u8FD9\u6B21\u4EA4\u6362\u6CA1\u6709\u5F62\u6210\u540C\u8272\u76F4\u7EBF\u4E09\u8FDE\uFF0C\u6362\u4E00\u53EA\u8BD5\u8BD5~");
+        this.setStatus(this.tutorial ? "\u6309\u7EFF\u8272\u624B\u6307\u6ED1\u52A8\u8BD5\u8BD5\u770B~" : "\u9700\u8981 3 \u53EA\u540C\u8272\u8FDE\u6210\u76F4\u7EBF\u54E6");
         this.selected = -1;
         this.clearPreview();
         return;
+      }
+      if (this.tutorial && !isBossAction) {
+        if (!this.isSameSwapPair(a, b, this.tutorial.guideSwap)) {
+          this.sound.playInvalid();
+          this.setStatus("\u5148\u6309\u7EFF\u8272\u624B\u6307\u6ED1\u52A8\u8FD9\u4E24\u53EA\u732B\u54E6~");
+          this.selected = -1;
+          this.clearPreview();
+          return;
+        }
       }
       this.busy = true;
       const useSteps = this.stepEnabled && this.gameMode === "pvp";
@@ -2728,10 +3210,27 @@
         pulse: 0,
         holdLife: 1.5,
         maxHold: 1.5,
-        logs: []
+        logs: [],
+        age: 0,
+        shownDamage: 0,
+        tickPop: 0,
+        tier: 0,
+        burst: 0,
+        comboShown: 0,
+        stampLife: 0,
+        shake: 0,
+        logSlide: 0,
+        sweep: -1
       };
       this.sound.playSwap();
-      await this.animateBoardPositions(result.swapped, 0.22);
+      await this.animateSwapPair(
+        result.swapped,
+        a,
+        b,
+        isBossAction ? 0.56 : 0.34,
+        isBossAction ? 34 : 18,
+        isBossAction ? 0.2 : 0.12
+      );
       let turnTotalDamage = 0;
       for (let idx = 0; idx < result.events.length; idx++) {
         const event = result.events[idx];
@@ -2740,12 +3239,35 @@
         this.activeEventPhase = "match";
         this.activeWaveIndex = -1;
         this.comboTracker.rounds = event.number;
-        this.setStatus(`${actorLabel} \xB7 \u7B2C ${event.number} \u8F6E \xB7 \u57FA\u7840 ${event.baseDamage} + \u9644\u52A0 ${event.bonus} = ${event.damage} \u4F24`);
+        this.setStatus(`${actorLabel} \xB7 \u7B2C ${event.number} \u8F6E \xB7 ${event.damage} \u4F24`);
         if (idx > 0) {
           this.sound.playCombo(event.number);
           this.showBanner(`\u7B2C ${event.number} \u8F6E\u8FDE\u9501\uFF01`, 0.78, "sparkle");
         }
-        await this.waitSec(idx > 0 ? 0.36 : 0.28);
+        this.phaseStart = this.elapsed;
+        this.matchOrder = this.computeMatchOrder(event);
+        let maxOrder = 0;
+        const matchedVis = [];
+        for (const [cell, order] of this.matchOrder) {
+          maxOrder = Math.max(maxOrder, order);
+          const cat = event.before[cell];
+          const vis = cat ? this.visuals.get(cat.id) : void 0;
+          if (vis) matchedVis.push({ vis, order });
+        }
+        const matchDur = Math.max(idx > 0 ? 0.62 : 0.55, maxOrder * NEST_LIGHT_STEP + 0.36);
+        await this.runTween(matchDur, "linear", (t) => {
+          const now = t * matchDur;
+          for (const m of matchedVis) {
+            const lp = Math.max(0, Math.min(1, (now - m.order * NEST_LIGHT_STEP) / 0.22));
+            m.vis.scale = 1 + 0.14 * Math.sin(Math.PI * lp);
+          }
+        });
+        for (const m of matchedVis) m.vis.scale = 1;
+        const defender = attacker === 0 ? 1 : 0;
+        let hpLeft = Math.max(0, this.state.hp[defender] - event.hp[defender]);
+        let shieldLeft = this.state.shield ? Math.max(0, this.state.shield[defender] - event.shield[defender]) : 0;
+        const popupColor = event.trueDamage > 0 ? "#9333ea" : "#e54d42";
+        let weightLeft = event.waves.reduce((s, wv) => s + Math.max(0, wv.damage), 0);
         const mergeItems = [];
         for (const center of event.centers) {
           const cp = this.cellPoint(center.cell);
@@ -2762,13 +3284,14 @@
           this.activeEventPhase = "merge";
           const hasRainbowCenter = event.centers.some((c) => c.resultLevel === 3);
           this.sound.playMerge(hasRainbowCenter ? 3 : 2);
-          await this.runTween(0.26, "cubicInOut", (t) => {
+          await this.runTween(0.42, "cubicInOut", (t) => {
             for (const m of mergeItems) {
               m.vis.x = m.sx + (m.tx - m.sx) * t;
               m.vis.y = m.sy + (m.ty - m.sy) * t;
               m.vis.scale = 1 - 0.8 * t;
             }
           });
+          if (event.waves.length > 0) await this.waitSec(0.15);
         }
         let waveShownDamage = 0;
         if (event.waves.length > 0) {
@@ -2778,34 +3301,79 @@
             this.activeWaveIndex = w;
             const pulseTargets = wave.sources.map((c) => event.before[c]).filter((c) => Boolean(c)).map((c) => this.visuals.get(c.id)).filter((v) => Boolean(v));
             if (wave.wave > 0) {
-              this.setStatus(`${actorLabel} \xB7 \u7B2C ${event.number} \u8F6E \xB7 \u7B2C ${wave.wave} \u6CE2\u8FDE\u9501\u4E8C\u6B21\u5F15\u7206\uFF01`);
+              this.setStatus(`${actorLabel} \xB7 ${wave.wave + 1} \u8FDE\u73AF\u5F15\u7206\uFF01`);
               this.showBanner(`${wave.wave + 1} \u8FDE\u7206\uFF01`, 0.65, "blast");
             }
-            const chargeDur = wave.wave === 0 ? 0.18 : 0.28;
+            const chargeDur = wave.wave === 0 ? 0.5 : 0.55;
             const chargeScale = wave.wave === 0 ? 0.24 : 0.38;
-            if (pulseTargets.length > 0) {
-              await this.runTween(chargeDur, "backOut", (t) => {
-                for (const v of pulseTargets) v.scale = 1 + chargeScale * t;
-              });
-            } else {
-              await this.waitSec(chargeDur);
+            const sourceSet = new Set(wave.sources);
+            const shakers = wave.cells.filter((c) => !sourceSet.has(c)).map((c) => event.before[c]).filter((c) => Boolean(c)).map((c) => this.visuals.get(c.id)).filter((v) => Boolean(v)).map((v) => ({ v, bx: v.x, by: v.y }));
+            await this.runTween(chargeDur, "backOut", (t) => {
+              for (const v of pulseTargets) v.scale = 1 + chargeScale * t;
+              const amp = 3.2 * Math.min(1, t);
+              for (const s of shakers) {
+                s.v.x = s.bx + Math.sin(this.elapsed * 55 + s.v.id) * amp;
+                s.v.y = s.by + Math.cos(this.elapsed * 47 + s.v.id) * amp * 0.6;
+              }
+            });
+            for (const s of shakers) {
+              s.v.x = s.bx;
+              s.v.y = s.by;
             }
             this.sound.playBlast(wave.wave);
             this.spawnWaveBurstEffects(event, wave.sources, wave.cells, wave.wave);
             this.comboTracker.blastWaves += 1;
             waveShownDamage += wave.damage;
             const waveCol = WAVE_COLORS[Math.min(wave.wave, WAVE_COLORS.length - 1)];
-            const waveKindLabel = wave.kind === "rainbow" ? "\u70AB\u5F69\u5168\u7206" : wave.wave === 0 ? "W0 \u5BBD\u5149\u675F\u8D77\u7206" : `\u21B3 W${wave.wave} \u4E8C\u6B21\u5F15\u7206`;
-            this.pushComboLog(wave.damage, `R${event.number} ${waveKindLabel}`, waveCol);
+            const waveKindLabel = wave.kind === "rainbow" ? "\u70AB\u5F69\u5168\u5411\u7206" : wave.wave === 0 ? "\u5BBD\u5149\u675F\u7206\u53D1" : `${wave.wave + 1} \u8FDE\u73AF\u5F15\u7206`;
+            this.pushComboLog(wave.damage, waveKindLabel, waveCol);
+            const isLastWave = w === event.waves.length - 1;
+            const wWeight = Math.max(0, wave.damage);
+            const frac = weightLeft > 0 ? wWeight / weightLeft : 1 / (event.waves.length - w);
+            const hpShare = isLastWave ? hpLeft : Math.round(hpLeft * frac);
+            const shieldShare = isLastWave ? shieldLeft : Math.round(shieldLeft * frac);
+            hpLeft -= hpShare;
+            shieldLeft -= shieldShare;
+            weightLeft -= wWeight;
+            this.launchDamageFlyers(
+              this.flyerStarts(event, wave.cells, 8, 28),
+              defender,
+              hpShare,
+              shieldShare,
+              waveCol,
+              popupColor
+            );
             for (const cell of wave.cells) {
               const orig = event.before[cell];
               if (orig) this.visuals.delete(orig.id);
             }
-            await this.waitSec(wave.wave === 0 ? 0.36 : 0.42);
+            await this.waitSec(wave.wave === 0 ? 0.6 : 0.65);
           }
           this.activeWaveIndex = -1;
         } else {
           this.platform.vibrate("light");
+          const memberCells = [];
+          const centerOf = /* @__PURE__ */ new Map();
+          for (const center of event.centers) {
+            for (const cell of center.members) {
+              if (cell === center.cell) continue;
+              memberCells.push(cell);
+              centerOf.set(cell, center.cell);
+            }
+          }
+          this.launchDamageFlyers(
+            this.flyerStarts(event, memberCells, 6, 20, (c) => {
+              var _a;
+              return (_a = centerOf.get(c)) != null ? _a : c;
+            }),
+            defender,
+            hpLeft,
+            shieldLeft,
+            "#ffb347",
+            popupColor
+          );
+          hpLeft = 0;
+          shieldLeft = 0;
         }
         this.comboTracker.trueDamage += event.trueDamage;
         this.comboTracker.shieldBlocked += event.shieldBlocked;
@@ -2813,18 +3381,18 @@
           const hasRainbow = event.centers.some((c) => c.resultLevel === 3);
           const mergeTag = hasRainbow ? "\u5408\u6210\u70AB\u5F69\u732B" : "\u5408\u6210\u5927\u732B";
           const comboTag = event.bonus > 0 ? ` \xB7 \u8FDE\u9501+${event.bonus}` : "";
-          this.pushComboLog(event.damage, `R${event.number} ${mergeTag}${comboTag}`, "#d97706");
+          this.pushComboLog(event.damage, `${mergeTag}${comboTag}`, "#d97706");
         } else {
           const delta = event.damage - waveShownDamage;
           if (delta > 0) {
-            const extraTag = event.trueDamage > 0 ? `\u771F\u4F24+${event.trueDamage} / \u52A0\u6210` : event.bonus > 0 ? `\u8FDE\u9501/\u795D\u798F\u52A0\u6210` : "\u795D\u798F\u589E\u4F24";
+            const extraTag = event.trueDamage > 0 ? `\u771F\u4F24 +${event.trueDamage}` : event.bonus > 0 ? "\u8FDE\u9501\u52A0\u4F24" : "\u795D\u798F\u589E\u4F24";
             this.pushComboLog(
               delta,
-              `R${event.number} ${extraTag}`,
+              extraTag,
               event.trueDamage > 0 ? "#9333ea" : "#e54d42"
             );
           } else if (delta < 0) {
-            this.pushComboLog(delta, `R${event.number} \u51CF\u4F24\u751F\u6548`, "#2563eb", `${delta}`);
+            this.pushComboLog(delta, "\u51CF\u4F24\u751F\u6548", "#2563eb", `${delta}`);
           }
         }
         this.activeEventPhase = "collapse";
@@ -2833,7 +3401,6 @@
         if (this.state.shield) {
           this.state.shield = [event.shield[0], event.shield[1]];
         }
-        this.spawnFloatingDamage(event, attacker);
         const newBigs = [];
         for (const center of event.centers) {
           if (!center.survives) continue;
@@ -2846,7 +3413,7 @@
           }
         }
         if (newBigs.length > 0) {
-          await this.runTween(0.28, "backOut", (t) => {
+          await this.runTween(0.4, "backOut", (t) => {
             for (const v of newBigs) v.scale = 0.4 + 0.6 * t;
           });
         }
@@ -2856,7 +3423,7 @@
           const sx = vis.x;
           const sy = vis.y;
           const tp = this.cellPoint(move.to);
-          await this.runTween(0.055, "cubicInOut", (t) => {
+          await this.runTween(0.075, "cubicInOut", (t) => {
             vis.x = sx + (tp.x - sx) * t;
             vis.y = sy + (tp.y - sy) * t;
           });
@@ -2887,7 +3454,7 @@
             this.visuals.set(vis.id, vis);
             spawns.push({ vis, sx, sy, tx: tp.x, ty: tp.y });
           }
-          await this.runTween(0.26, "backOut", (t) => {
+          await this.runTween(0.36, "backOut", (t) => {
             const posT = Math.min(1, t);
             for (const s of spawns) {
               s.vis.x = s.sx + (s.tx - s.sx) * posT;
@@ -2904,10 +3471,11 @@
             this.statusText += " \xB7 \u70B9\u51FB\u201C\u4E0B\u4E00\u8F6E\u201D\u7EE7\u7EED";
             await this.waitForNextStep();
           } else {
-            await this.waitSec(0.24);
+            await this.waitSec(0.42);
           }
         }
       }
+      await this.waitFlyersLanded();
       this.state = result.state;
       this.ambientAnims = [];
       this.ambientSpawnTimer = 1.4;
@@ -2916,8 +3484,26 @@
       this.computeTurnSummary(result.events);
       if (this.comboTracker) {
         this.comboTracker.active = false;
-        this.comboTracker.holdLife = 1.5;
-        this.comboTracker.maxHold = 1.5;
+        this.comboTracker.holdLife = 2;
+        this.comboTracker.maxHold = 2;
+      }
+      if (this.tutorial) {
+        const completed = this.tutorial;
+        this.sound.playChime();
+        this.showBanner(completed.successBanner, 1.15, "sparkle");
+        this.setStatus(completed.successBanner);
+        await this.waitSec(1.1);
+        if (!this.tutorial || this.tutorial.step !== completed.step) {
+          this.busy = false;
+          return;
+        }
+        if (completed.step === 0) {
+          this.loadTutorialStep(1);
+          this.busy = false;
+        } else {
+          this.finishTutorial(true);
+        }
+        return;
       }
       if (this.gameMode === "roguelike") {
         await this.handleRoguelikePostSwap(attacker, result.events, turnTotalDamage, result.notice);
@@ -2929,6 +3515,10 @@
         this.setStatus(result.notice);
       } else {
         this.setStatus(`\u8F6E\u5230\u73A9\u5BB6 ${this.state.player + 1} \xB7 \u7559\u610F\u5BF9\u624B\u7559\u4E0B\u7684\u5927\u732B`);
+      }
+      if (this.state.winner < 0) {
+        await this.waitSec(0.2);
+        await this.playTurnIntro(this.state.player);
       }
       this.refreshPlayerTurnGuides();
       this.busy = false;
@@ -2951,7 +3541,6 @@
         this.run.bossShield = this.state.shield ? this.state.shield[1] : 0;
         if (this.state.winner === 0) {
           this.run.defeatedBosses.push(boss.id);
-          this.bossIntent = null;
           this.sound.playVictory();
           if (this.run.stageIndex < BOSSES.length - 1) {
             this.run.playerHp = Math.min(this.run.playerMaxHp, this.run.playerHp + STAGE_CLEAR_HEAL);
@@ -2961,11 +3550,12 @@
               this.run.seed + (this.run.stageIndex + 1) * 7919 + this.run.totalTurns * 13
             );
             this.run.phase = "reward";
-            this.setStatus(`\u51FB\u8D25 ${boss.name}\uFF01\u56DE\u590D +${STAGE_CLEAR_HEAL} HP\uFF0C\u9009 1 \u4E2A\u732B\u732B\u795D\u798F`, "trophy");
-            this.showBanner(`\u51FB\u8D25 ${boss.name}\uFF01`, 1.5, "trophy");
+            this.expandedRewardRelicId = null;
+            this.setStatus(`\u51FB\u8D25 ${boss.name}\uFF01\u9009 1 \u4E2A\u795D\u798F`, "trophy");
+            this.showBanner(`\u51FB\u8D25 ${boss.name}\uFF01`, 1.4, "trophy");
           } else {
             this.run.phase = "victory";
-            this.setStatus("\u5168\u90E8\u732B\u6897 Boss \u5DF2\u51FB\u8D25\uFF0C\u732B\u5C4B\u5927\u6377\uFF01", "trophy");
+            this.setStatus("\u5168\u90E8 Boss \u5DF2\u51FB\u8D25\uFF0C\u901A\u5173\u5927\u6377\uFF01", "trophy");
             this.showBanner("\u901A\u5173\u5927\u6377\uFF01", 1.8, "trophy");
           }
           this.busy = false;
@@ -2974,15 +3564,15 @@
         if (notice) {
           this.setStatus(notice);
         } else if (post.notes.length > 0) {
-          this.setStatus(`\u795D\u798F\u751F\u6548\uFF1A${post.notes.join(" \xB7 ")}`);
+          this.setStatus(post.notes.join(" \xB7 "));
         }
-        await this.waitSec(0.45);
+        await this.waitSec(0.3);
         await this.runBossTurn();
       } else {
         const bossPost = applyBossPostTurnPassive(this.state, boss, events);
         if (bossPost.bossHealed > 0) {
-          this.spawnFloatingText(`+${bossPost.bossHealed} HP`, 118, "#16a34a", 340);
-          this.showBanner(`\u5927\u6A58\u5E72\u996D\u56DE\u8840 +${bossPost.bossHealed} HP\uFF01`, 1.2, "rice");
+          this.spawnFloatingText(`+${bossPost.bossHealed} HP`, 92, "#16a34a", 340);
+          this.showBanner(`\u5927\u6A58\u5403\u6A58\u56DE\u8840 +${bossPost.bossHealed}`, 1.2, "rice");
         }
         this.run.calmDefuseActive = false;
         this.run.bossTurnsTaken += 1;
@@ -2991,7 +3581,6 @@
         this.run.bossShield = this.state.shield ? this.state.shield[1] : 0;
         if (this.state.winner === 1 || this.run.playerHp <= 0) {
           this.run.phase = "defeat";
-          this.bossIntent = null;
           this.sound.playDefeat();
           this.setStatus(`\u88AB ${boss.name} \u6320\u8DB4\u5566\uFF01\u70B9\u51FB\u91CD\u65B0\u6311\u6218`);
           this.busy = false;
@@ -3001,14 +3590,30 @@
           this.setStatus(notice);
           await this.waitSec(0.4);
         }
+        await this.waitSec(0.2);
+        await this.playTurnIntro(0);
         this.refreshPlayerTurnGuides();
         this.busy = false;
       }
     }
+    /** 回合切换过场：先收起上一方战报卡，再扫过一条阵营色带 */
+    async playTurnIntro(player) {
+      const ct = this.comboTracker;
+      if (ct) {
+        ct.active = false;
+        ct.sweep = 2;
+        ct.holdLife = Math.min(ct.holdLife, 0.3);
+      }
+      const dur = 0.9;
+      this.turnIntro = { player, t: 0, dur: dur / this.speed };
+      this.platform.vibrate("light");
+      await this.waitSec(dur);
+      this.turnIntro = null;
+    }
     async runBossTurn() {
-      var _a, _b;
       const boss = getBossProfile(this.run.stageIndex);
-      this.setStatus(`\u8F6E\u5230 ${boss.name} \u884C\u52A8...`);
+      this.setStatus(`\u8F6E\u5230 ${boss.name} \u884C\u52A8\uFF01`);
+      await this.playTurnIntro(1);
       const skill = applyBossPreTurnSkill(this.state, boss, this.run.bossTurnsTaken);
       if (skill.triggered) {
         this.run.bossShield = this.state.shield ? this.state.shield[1] : 0;
@@ -3016,10 +3621,10 @@
         this.ambientSpawnTimer = 1.4;
         this.syncVisuals(this.state.board);
         const skillIcon = boss.id === "cow" ? "bolt" : "crown";
-        this.showBanner(skill.banner, 1.5, skillIcon);
+        this.showBanner(skill.banner, 1.4, skillIcon);
         this.setStatus(skill.banner, skillIcon);
         if (skill.shieldGained > 0) {
-          this.spawnFloatingText(`+${skill.shieldGained} \u76FE`, 118, "#2563eb", 470);
+          this.spawnFloatingText(`+${skill.shieldGained} \u76FE`, 92, "#2563eb", 470);
         }
         if (skill.upgradedCell >= 0) {
           const upCat = this.state.board[skill.upgradedCell];
@@ -3032,29 +3637,25 @@
           }
         }
         if (this.shakeEnabled) void this.playShake(0.9);
-        await this.waitSec(0.55);
+        await this.waitSec(0.5);
       }
-      let chosenSwap = (_b = (_a = this.bossIntent) == null ? void 0 : _a.swap) != null ? _b : null;
-      if (!chosenSwap || !validSwap(this.state, chosenSwap[0], chosenSwap[1])) {
-        if (chosenSwap) {
-          this.sound.playChime();
-          this.showBanner("\u610F\u56FE\u88AB\u4F60\u62C6\u7A7F\uFF01Boss \u4E34\u65F6\u6362\u62DB\uFF01", 1.3, "target");
-          this.setStatus(`\u4F60\u62C6\u7A7F\u4E86 ${boss.name} \u7684\u8BA1\u5212\uFF0C\u5B83\u6B63\u5728\u91CD\u65B0\u627E\u6B65...`, "target");
-          await this.waitSec(0.42);
-        }
-        const mult = this.run.calmDefuseActive ? 0.7 : 1;
-        const fresh = computeBossIntent(this.state, boss, this.run.bossTurnsTaken, mult);
-        chosenSwap = fresh.swap;
-      }
+      const mult = this.run.calmDefuseActive ? 0.7 : 1;
+      const chosenSwap = computeBossIntent(this.state, boss, this.run.bossTurnsTaken, mult).swap;
       if (!chosenSwap) {
         this.state.player = 0;
         this.refreshPlayerTurnGuides();
         this.busy = false;
         return;
       }
+      this.setStatus(`${boss.name} \u601D\u8003\u4E2D...`);
+      this.bossThink = 1;
+      await this.waitSec(0.5);
       this.bossHighlightSwap = chosenSwap;
-      this.setStatus(`${boss.name} \u51FA\u624B\u4EA4\u6362\uFF01`);
-      await this.waitSec(0.58);
+      this.setStatus(`${boss.name} \u884C\u52A8\u4E2D...`);
+      const aimDur = 0.62;
+      this.bossAim = { a: chosenSwap[0], b: chosenSwap[1], t: 0, dur: aimDur / this.speed };
+      await this.waitSec(aimDur);
+      this.bossAim = null;
       await this.submitSwap(chosenSwap[0], chosenSwap[1], true);
     }
     computeTurnSummary(events) {
@@ -3101,12 +3702,37 @@
         this.bannerLife = Math.max(0, this.bannerLife - dt);
       }
       if (this.comboTracker) {
-        if (this.comboTracker.pulse > 0) {
-          this.comboTracker.pulse = Math.max(0, this.comboTracker.pulse - dt * 4.5);
+        const ct = this.comboTracker;
+        ct.age += dt;
+        if (ct.pulse > 0) {
+          ct.pulse = Math.max(0, ct.pulse - dt * 4.5);
         }
-        if (!this.comboTracker.active) {
-          this.comboTracker.holdLife -= dt;
-          if (this.comboTracker.holdLife <= 0) {
+        const prevInt = Math.floor(ct.shownDamage + 1e-4);
+        const diff = ct.totalDamage - ct.shownDamage;
+        if (Math.abs(diff) > 1e-3) {
+          const step = Math.max(14 * dt, Math.abs(diff) * dt * 9);
+          ct.shownDamage = Math.abs(diff) <= step ? ct.totalDamage : ct.shownDamage + Math.sign(diff) * step;
+        }
+        if (Math.floor(ct.shownDamage + 1e-4) !== prevInt) ct.tickPop = 1;
+        const newTier = comboDamageTier(Math.floor(ct.shownDamage + 1e-4));
+        if (newTier > ct.tier) ct.burst = 1;
+        ct.tier = newTier;
+        const comboCount = ct.blastWaves > 1 ? ct.blastWaves : ct.rounds > 1 ? ct.rounds : 0;
+        if (comboCount > ct.comboShown) {
+          ct.comboShown = comboCount;
+          ct.stampLife = 1;
+          ct.shake = 1;
+        }
+        ct.tickPop = Math.max(0, ct.tickPop - dt * 7);
+        ct.burst = Math.max(0, ct.burst - dt * 1.8);
+        ct.stampLife = Math.max(0, ct.stampLife - dt * 3.2);
+        ct.shake = Math.max(0, ct.shake - dt * 4);
+        ct.logSlide = Math.max(0, ct.logSlide - dt * 5);
+        if (!ct.active) {
+          if (ct.sweep < 0) ct.sweep = 0;
+          ct.sweep = Math.min(2, ct.sweep + dt * 1.5);
+          ct.holdLife -= dt;
+          if (ct.holdLife <= 0) {
             this.comboTracker = null;
           }
         }
@@ -3154,6 +3780,183 @@
         }
         f.y -= 52 * dt * this.speed;
       }
+      this.updateDamageFlyers(dt);
+      this.updateHpDisplay(dt);
+      if (this.turnIntro) this.turnIntro.t += dt;
+      if (this.bossAim) this.bossAim.t += dt;
+      this.bossThink = Math.max(0, this.bossThink - dt * 1.6);
+      const tintTarget = this.state.winner < 0 && this.state.player === 1 && !this.tutorial ? 1 : 0;
+      this.turnTint += (tintTarget - this.turnTint) * Math.min(1, dt * 4);
+    }
+    /** 阵营主题色：你/P1 暖绿，Boss 红，PvP 的 P2 紫 */
+    sideColor(player) {
+      if (player === 0) return "#3fb877";
+      return this.gameMode === "roguelike" ? "#e53935" : "#8b5cf6";
+    }
+    /** B. 对手回合时棋盘四周的阵营色暗角 */
+    renderTurnTint(ctx) {
+      if (this.turnTint < 0.01) return;
+      const rgb = this.gameMode === "roguelike" ? "229, 57, 53" : "139, 92, 246";
+      const breathe = 0.85 + 0.15 * Math.sin(this.elapsed * 3);
+      const g = ctx.createRadialGradient(360, 620, 260, 360, 620, 780);
+      g.addColorStop(0, `rgba(${rgb}, 0)`);
+      g.addColorStop(1, `rgba(${rgb}, ${0.34 * this.turnTint * breathe})`);
+      ctx.save();
+      ctx.fillStyle = g;
+      ctx.fillRect(-200, -200, VIRTUAL_W + 400, VIRTUAL_H + 400);
+      ctx.restore();
+    }
+    /** C. Boss 瞄准：两格红色准星收拢锁定，随后划出三道爪痕箭头 */
+    renderBossAim(ctx) {
+      const aim = this.bossAim;
+      if (!aim) return;
+      const p = Math.min(1, aim.t / aim.dur);
+      const lockP = Math.min(1, p / 0.5);
+      const lockE = 1 - Math.pow(1 - lockP, 3);
+      const pa = this.cellPoint(aim.a);
+      const pb = this.cellPoint(aim.b);
+      const red = "#e53935";
+      ctx.save();
+      ctx.lineCap = "round";
+      for (const c of [pa, pb]) {
+        const r = 86 - 38 * lockE;
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate((1 - lockE) * 1.6);
+        ctx.globalAlpha = 0.35 + 0.65 * lockE;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = red;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        for (let k = 0; k < 4; k++) {
+          const a = k * Math.PI / 2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * (r - 12), Math.sin(a) * (r - 12));
+          ctx.lineTo(Math.cos(a) * (r + 12), Math.sin(a) * (r + 12));
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 8;
+          ctx.stroke();
+          ctx.strokeStyle = red;
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      if (p > 0.5) {
+        const clawP = Math.min(1, (p - 0.5) / 0.38);
+        const e = 1 - Math.pow(1 - clawP, 2);
+        const dx = pb.x - pa.x;
+        const dy = pb.y - pa.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        for (let k = -1; k <= 1; k++) {
+          const off = k * 14;
+          const sx = pa.x + nx * off - dx / len * 22;
+          const sy = pa.y + ny * off - dy / len * 22;
+          const ex = sx + (dx + dx / len * 44) * e;
+          const ey = sy + (dy + dy / len * 44) * e;
+          const bend = 18 * (1 - Math.abs(k) * 0.3);
+          const cx = (sx + ex) / 2 + nx * bend;
+          const cy = (sy + ey) / 2 + ny * bend;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.quadraticCurveTo(cx, cy, ex, ey);
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 11 - Math.abs(k) * 2;
+          ctx.stroke();
+          ctx.strokeStyle = red;
+          ctx.lineWidth = 6 - Math.abs(k) * 1.5;
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+    /** A. 回合切换过场：压暗 + 斜向阵营色带滑入 → 停留 → 滑出 */
+    renderTurnIntro(ctx) {
+      const ti = this.turnIntro;
+      if (!ti) return;
+      const p = Math.min(1, ti.t / ti.dur);
+      const env = p < 0.18 ? p / 0.18 : p > 0.82 ? (1 - p) / 0.18 : 1;
+      const bandX = p < 0.24 ? (1 - easeBackOut(p / 0.24)) * 820 : p > 0.78 ? -Math.pow((p - 0.78) / 0.22, 2) * 900 : 0;
+      const textX = bandX * 1.25;
+      const isRogue = this.gameMode === "roguelike";
+      const boss = isRogue ? getBossProfile(this.run.stageIndex) : null;
+      const color = this.sideColor(ti.player);
+      const title = ti.player === 0 ? isRogue ? "\u4F60\u7684\u56DE\u5408" : "\u73A9\u5BB6 1 \u7684\u56DE\u5408" : boss ? `${boss.name}\u7684\u56DE\u5408` : "\u73A9\u5BB6 2 \u7684\u56DE\u5408";
+      const sub = ti.player === 0 ? isRogue ? "\u62D6\u52A8\u732B\u732B\uFF0C\u6253\u51FA\u8FDE\u7206\uFF01" : "\u8F6E\u5230\u4F60\u51FA\u62DB" : boss ? boss.traitShort : "\u8F6E\u5230\u4F60\u51FA\u62DB";
+      const avatar = ti.player === 0 ? this.assets.avatarP1 : boss ? this.assets.bosses[boss.id] : this.assets.avatarP2;
+      ctx.save();
+      ctx.globalAlpha = env;
+      ctx.fillStyle = "rgba(40, 24, 18, 0.32)";
+      ctx.fillRect(-200, -200, VIRTUAL_W + 400, VIRTUAL_H + 400);
+      const cy = 620;
+      const bh = 168;
+      const skew = 60;
+      const bandPath = (inset) => {
+        ctx.beginPath();
+        ctx.moveTo(-120 + bandX + skew, cy - bh / 2 - inset);
+        ctx.lineTo(VIRTUAL_W + 120 + bandX + skew, cy - bh / 2 - 30 - inset);
+        ctx.lineTo(VIRTUAL_W + 120 + bandX - skew, cy + bh / 2 - 30 + inset);
+        ctx.lineTo(-120 + bandX - skew, cy + bh / 2 + inset);
+        ctx.closePath();
+      };
+      ctx.globalAlpha = 1;
+      bandPath(10);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.strokeStyle = INK2;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      bandPath(0);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.save();
+      bandPath(0);
+      ctx.clip();
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = "#ffffff";
+      const off = ti.t * 420 % 56;
+      for (let sx = -260 + off; sx < VIRTUAL_W + 260; sx += 56) {
+        ctx.beginPath();
+        ctx.moveTo(sx + bandX, cy + bh);
+        ctx.lineTo(sx + 22 + bandX, cy + bh);
+        ctx.lineTo(sx + 22 + 120 + bandX, cy - bh);
+        ctx.lineTo(sx + 120 + bandX, cy - bh);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+      if (avatar.ready) {
+        const bounce = Math.sin(ti.t * 14) * 4 * env;
+        const size = 150;
+        ctx.drawImage(avatar.el, 70 + textX, cy - size / 2 - 22 + bounce, size, size);
+      }
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.font = `900 58px ${FONT_FAMILY2}`;
+      const tx = 236 + textX;
+      ctx.save();
+      ctx.translate(tx, cy - 22);
+      ctx.transform(1, 0, -0.12, 1, 0, 0);
+      ctx.strokeStyle = INK2;
+      ctx.lineWidth = 12;
+      ctx.strokeText(title, 0, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(title, 0, 0);
+      ctx.restore();
+      ctx.font = `800 24px ${FONT_FAMILY2}`;
+      ctx.strokeStyle = INK2;
+      ctx.lineWidth = 6;
+      ctx.strokeText(sub, tx + 4, cy + 34);
+      ctx.fillStyle = "#fff8e7";
+      ctx.fillText(sub, tx + 4, cy + 34);
+      ctx.restore();
     }
     /** 全局稀疏点缀：每隔约 1.6~2.8 秒挑 1 只静卧猫轻眨眼或轻甩尾，同屏最多 2 只 */
     updateAmbientAnims(dt) {
@@ -3212,6 +4015,59 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
+    }
+    /** 亮起的猫窝：白色光晕 + 高亮布艺边 + 亮起瞬间轻微弹一下 */
+    drawLitNest(ctx, cx, cy, color, lp) {
+      const pop = 1 + 0.1 * Math.sin(Math.PI * lp);
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, lp * 2);
+      traceRoundedHexagon(ctx, cx, cy, (HEX_RADIUS + 5) * pop, 13);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.fill();
+      traceRoundedHexagon(ctx, cx, cy, HEX_RADIUS * pop, 11);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = INK2;
+      ctx.lineWidth = 3.6;
+      ctx.stroke();
+      traceRoundedHexagon(ctx, cx, cy, HEX_RADIUS * 0.8 * pop, 9);
+      ctx.fillStyle = "#fff4d6";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(78, 52, 46, 0.36)";
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([6, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    /** 每条连线从远离合成中心的一端依次亮向中心；交叉格取较早顺序，合成中心统一最后亮 */
+    computeMatchOrder(event) {
+      var _a, _b, _c;
+      const order = /* @__PURE__ */ new Map();
+      const centerCells = new Set(event.centers.map((c) => c.cell));
+      for (const line of event.lines) {
+        const pts = line.cells.map((c) => ({ c, p: this.cellPoint(c) }));
+        let step = Infinity;
+        for (const a of pts) {
+          for (const b of pts) {
+            const d = Math.hypot(a.p.x - b.p.x, a.p.y - b.p.y);
+            if (d > 1 && d < step) step = d;
+          }
+        }
+        const centerCell = (_c = (_b = line.cells.find((c) => centerCells.has(c))) != null ? _b : (_a = event.centers.find((ct) => ct.members.some((m) => line.cells.includes(m)))) == null ? void 0 : _a.cell) != null ? _c : line.cells[0];
+        const cp = this.cellPoint(centerCell);
+        const dists = pts.map(({ c, p }) => ({ c, d: Math.round(Math.hypot(p.x - cp.x, p.y - cp.y) / step) }));
+        const maxD = Math.max(0, ...dists.map((x) => x.d));
+        for (const { c, d } of dists) {
+          const o = maxD - d;
+          const prev = order.get(c);
+          order.set(c, prev === void 0 ? o : Math.min(prev, o));
+        }
+      }
+      let maxO = 0;
+      for (const o of order.values()) maxO = Math.max(maxO, o);
+      for (const c of centerCells) order.set(c, maxO);
+      return order;
     }
     /** 绘制手绘星星爆发射线（支持按波次着色） */
     drawStarBlastArrow(ctx, ax, ay, bx, by, strokeColor = "#ff7e70") {
@@ -3303,6 +4159,7 @@
     }
     /** 手绘贴纸风按钮 */
     drawStickerButton(ctx, btn) {
+      var _a;
       this.buttons.push(btn);
       ctx.save();
       const radius = btn.round ? btn.h / 2 : 16;
@@ -3318,7 +4175,15 @@
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = btn.disabled ? "#a1887f" : INK2;
-      ctx.font = `800 ${btn.round ? 26 : 18}px ${FONT_FAMILY2}`;
+      let fontSize = btn.round ? 30 : 26;
+      ctx.font = `900 ${fontSize}px ${FONT_FAMILY2}`;
+      if (!btn.round && (!btn.icon || !((_a = this.assets.icons[btn.icon]) == null ? void 0 : _a.ready))) {
+        const maxTextW = btn.w - 20;
+        while (fontSize > 17 && ctx.measureText(btn.label).width > maxTextW) {
+          fontSize -= 1;
+          ctx.font = `900 ${fontSize}px ${FONT_FAMILY2}`;
+        }
+      }
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       const cx = btn.x + btn.w / 2;
@@ -3328,75 +4193,214 @@
       }
       ctx.restore();
     }
-    /** 手绘贴纸风玩家 / Boss 血条（支持护盾与肉鸽专属 Boss 贴纸头像） */
+    /** 新手教学专用：翠绿轨迹 + 手绘拖动圆点手指动效 */
+    drawTutorialGuide(ctx, swap) {
+      const a = this.cellPoint(swap[0]);
+      const b = this.cellPoint(swap[1]);
+      const cycle = this.elapsed % 1.45 / 1.45;
+      const moveT = cycle < 0.72 ? easeCubicInOut(cycle / 0.72) : 1;
+      const alpha = cycle < 0.12 ? cycle / 0.12 : cycle > 0.85 ? (1 - cycle) / 0.15 : 1;
+      const fx = a.x + (b.x - a.x) * moveT;
+      const fy = a.y + (b.y - a.y) * moveT;
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 14;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.strokeStyle = "#22c55e";
+      ctx.lineWidth = 7;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len;
+      const uy = dy / len;
+      const head = 17;
+      const cos = Math.cos(0.55);
+      const sin = Math.sin(0.55);
+      ctx.strokeStyle = "#16a34a";
+      ctx.lineWidth = 6.5;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - (ux * cos - uy * sin) * head, b.y - (ux * sin + uy * cos) * head);
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(b.x - (ux * cos + uy * sin) * head, b.y - (-ux * sin + uy * cos) * head);
+      ctx.stroke();
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      const ringR = 20 + moveT * 14;
+      ctx.strokeStyle = "rgba(34, 197, 94, 0.55)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(fx, fy, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(78, 52, 46, 0.25)";
+      ctx.beginPath();
+      ctx.arc(fx, fy + 4, 21, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#15803d";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(fx, fy, 20, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#22c55e";
+      ctx.beginPath();
+      ctx.ellipse(fx, fy + 4, 8, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const toeOffsets = [
+        [-8, -5],
+        [0, -8],
+        [8, -5]
+      ];
+      for (const [ox, oy] of toeOffsets) {
+        ctx.beginPath();
+        ctx.arc(fx + ox, fy + oy, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    /** 手绘贴纸风玩家 / Boss 血条（大字号高可读，支持护盾与肉鸽专属 Boss 贴纸头像） */
     drawPlayerBar(ctx, player, y) {
       const isRogue = this.gameMode === "roguelike";
-      const boss = isRogue ? getBossProfile(this.run.stageIndex) : null;
+      const boss = isRogue ? getBossProfile(this.tutorial ? 0 : this.run.stageIndex) : null;
       const isTurn = this.state.winner < 0 && this.state.player === player;
       const isWinner = this.state.winner === player;
       const maxHp = this.state.maxHp ? this.state.maxHp[player] : HP;
-      const shield = this.state.shield ? this.state.shield[player] : 0;
+      const shownHp = this.dispHp ? this.dispHp[player] : this.state.hp[player];
+      const hpLabel = Math.round(shownHp);
+      const shield = Math.round(
+        this.dispHp ? this.dispShield[player] : this.state.shield ? this.state.shield[player] : 0
+      );
+      const hit = this.barHit[player];
       const barX = 96;
-      const barW = player === 1 ? 460 : 596;
-      const barH = 48;
+      const barW = player === 1 ? 448 : 596;
+      const barH = 58;
       const radius = barH / 2;
       ctx.save();
+      if (hit > 0) {
+        ctx.translate(Math.sin(this.elapsed * 70) * hit * 5, Math.cos(this.elapsed * 55) * hit * 1.5);
+      }
+      const showTurnFx = this.state.winner < 0 && !this.tutorial;
+      if (showTurnFx && isTurn) {
+        ctx.save();
+        ctx.globalAlpha = 0.3 + 0.25 * Math.sin(this.elapsed * 5);
+        ctx.strokeStyle = this.sideColor(player);
+        ctx.lineWidth = 12;
+        drawRoundedRect(ctx, barX - 10, y - 10, barW + 20, barH + 20, radius + 10);
+        ctx.stroke();
+        ctx.restore();
+      } else if (showTurnFx) {
+        ctx.globalAlpha = 0.78;
+      }
       ctx.fillStyle = "#ffffff";
       drawRoundedRect(ctx, barX - 6, y - 6, barW + 12, barH + 12, radius + 6);
       ctx.fill();
       ctx.fillStyle = "#f5ebe0";
       drawRoundedRect(ctx, barX, y, barW, barH, radius);
       ctx.fill();
-      const ratio = Math.max(0, Math.min(1, this.state.hp[player] / Math.max(1, maxHp)));
-      if (ratio > 0) {
+      const ratio = Math.max(0, Math.min(1, shownHp / Math.max(1, maxHp)));
+      const trailRatio = this.dispHp ? Math.max(ratio, Math.min(1, this.trailHp[player] / Math.max(1, maxHp))) : ratio;
+      if (trailRatio > 0) {
         ctx.save();
         drawRoundedRect(ctx, barX, y, barW, barH, radius);
         ctx.clip();
+        if (trailRatio > ratio) {
+          ctx.fillStyle = "#ff8a80";
+          ctx.fillRect(barX + barW * ratio, y, barW * (trailRatio - ratio), barH);
+        }
         ctx.fillStyle = player === 0 ? "#bae8cb" : isRogue && boss ? boss.barFillColor : "#d2c2fa";
         ctx.fillRect(barX, y, barW * ratio, barH);
+        if (hit > 0) {
+          ctx.globalAlpha = hit * 0.55;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(barX, y, barW, barH);
+        }
         ctx.restore();
       }
       ctx.strokeStyle = isTurn || isWinner ? "#d97706" : INK2;
-      ctx.lineWidth = isTurn || isWinner ? 4.2 : 3.4;
+      ctx.lineWidth = isTurn || isWinner ? 4.4 : 3.6;
       drawRoundedRect(ctx, barX, y, barW, barH, radius);
       ctx.stroke();
       ctx.fillStyle = INK2;
-      ctx.font = `900 ${player === 1 ? 20 : 22}px ${FONT_FAMILY2}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const centerX = shield > 0 ? barX + (barW - 84) * 0.5 : barX + barW * 0.5;
       let label = "";
       if (isRogue && boss) {
         if (player === 1) {
-          label = `${boss.name}  ${this.state.hp[1]}/${maxHp}`;
+          label = `${boss.name}  ${hpLabel}/${maxHp}`;
         } else {
-          const calmTag = this.run.calmDefuseActive ? " \xB7 \u51CF\u4F2430%" : "";
-          label = `\u4F60  ${this.state.hp[0]}/${maxHp}${calmTag}`;
+          const calmTag = this.run.calmDefuseActive ? " \xB7 \u51CF\u4F24" : "";
+          label = `\u4F60  ${hpLabel}/${maxHp}${calmTag}`;
         }
       } else {
-        const suffix = isWinner ? "  \xB7 \u83B7\u80DC" : isTurn ? "  \xB7 \u5F53\u524D\u56DE\u5408" : "";
-        label = `P${player + 1}  ${this.state.hp[player]}${suffix}`;
+        const suffix = isWinner ? " \xB7 \u80DC" : isTurn ? " \xB7 \u51FA\u62DB" : "";
+        label = `P${player + 1}  ${hpLabel}${suffix}`;
       }
+      let barFontSize = 28;
+      ctx.font = `900 ${barFontSize}px ${FONT_FAMILY2}`;
+      const maxLabelW = shield > 0 ? barW - 126 : barW - 44;
+      while (barFontSize > 20 && ctx.measureText(label).width > maxLabelW) {
+        barFontSize -= 1;
+        ctx.font = `900 ${barFontSize}px ${FONT_FAMILY2}`;
+      }
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const centerX = shield > 0 ? barX + (barW - 98) * 0.5 + 8 : barX + barW * 0.5 + 8;
       ctx.fillText(label, centerX, y + barH / 2 + 1);
       if (shield > 0) {
-        const sw = 74;
-        const sh = 30;
-        const sx = barX + barW - sw - 8;
+        const sw = 88;
+        const sh = 40;
+        const sx = barX + barW - sw - 9;
         const sy = y + (barH - sh) / 2;
         ctx.fillStyle = "#dbeafe";
         ctx.strokeStyle = "#2563eb";
-        ctx.lineWidth = 2.6;
-        drawRoundedRect(ctx, sx, sy, sw, sh, 15);
+        ctx.lineWidth = 3;
+        drawRoundedRect(ctx, sx, sy, sw, sh, 20);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = "#1d4ed8";
-        ctx.font = `900 16px ${FONT_FAMILY2}`;
-        this.drawCenteredIconText(ctx, "shield", `${shield}`, sx + sw / 2, sy + sh / 2 + 1, 22, 4);
+        ctx.font = `900 22px ${FONT_FAMILY2}`;
+        this.drawCenteredIconText(ctx, "shield", `${shield}`, sx + sw / 2, sy + sh / 2 + 1, 26, 5);
       }
       const avatar = player === 0 ? this.assets.avatarP1 : isRogue && boss ? this.assets.bosses[boss.id] : this.assets.avatarP2;
       if (avatar.ready) {
-        const avSize = 98;
-        ctx.drawImage(avatar.el, 22, y - 28, avSize, avSize);
+        const avSize = 104;
+        const think = player === 1 ? this.bossThink : 0;
+        if (think > 0) {
+          const s = 1 + 0.16 * Math.abs(Math.sin(think * Math.PI * 3)) * think;
+          const cx = 16 + avSize / 2;
+          const cy = y - 24 + avSize / 2;
+          ctx.save();
+          ctx.translate(cx, cy - 10 * Math.abs(Math.sin(think * Math.PI * 3)) * think);
+          ctx.scale(s, s);
+          ctx.drawImage(avatar.el, -avSize / 2, -avSize / 2, avSize, avSize);
+          ctx.restore();
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, think * 3);
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = INK2;
+          ctx.lineWidth = 3;
+          drawRoundedRect(ctx, 100, y - 30, 64, 36, 18);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = INK2;
+          for (let k = 0; k < 3; k++) {
+            const dotY = y - 12 + Math.sin(this.elapsed * 10 - k * 0.9) * 3;
+            ctx.beginPath();
+            ctx.arc(118 + k * 14, dotY, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        } else {
+          ctx.drawImage(avatar.el, 16, y - 24, avSize, avSize);
+        }
       }
       ctx.restore();
     }
@@ -3419,120 +4423,170 @@
       }
     }
     render() {
-      var _a, _b, _c, _d;
       const ctx = this.platform.ctx;
       this.buttons = [];
       ctx.save();
       this.drawFullBackground(ctx);
       ctx.translate(this.offsetX, this.offsetY);
       ctx.scale(this.scale, this.scale);
-      if (this.gameMode === "roguelike") {
-        const boss = getBossProfile(this.run.stageIndex);
+      if (this.tutorial) {
+        const tut = this.tutorial;
         ctx.save();
-        ctx.fillStyle = "rgba(255, 250, 240, 0.92)";
+        ctx.fillStyle = "rgba(255, 250, 240, 0.96)";
         ctx.strokeStyle = INK2;
-        ctx.lineWidth = 2.4;
-        drawRoundedRect(ctx, 118, 42, 496, 36, 18);
+        ctx.lineWidth = 3.2;
+        drawRoundedRect(ctx, 24, 34, 496, 56, 28);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = boss.accentColor;
-        ctx.font = `900 16px ${FONT_FAMILY2}`;
+        ctx.fillStyle = "#c2610c";
+        ctx.font = `900 28px ${FONT_FAMILY2}`;
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillText(`\u7B2C ${boss.stage}/3 \u5173`, 134, 61);
-        ctx.fillStyle = INK_SOFT;
-        ctx.font = `700 15px ${FONT_FAMILY2}`;
-        const skillBadge = boss.id === "orange" ? boss.traitShort : this.bossIntent ? this.bossIntent.skillText : boss.traitShort;
-        const skillIcon = ((_a = this.bossIntent) == null ? void 0 : _a.skillReady) && boss.id !== "orange" ? boss.id === "cow" ? "bolt" : "crown" : null;
-        if (skillIcon && this.drawUiIcon(ctx, skillIcon, 223, 60, 22)) {
-          ctx.fillText(skillBadge, 238, 61);
-        } else {
-          ctx.fillText(`\xB7  ${skillBadge}`, 212, 61);
-        }
-        for (let s = 0; s < BOSSES.length; s++) {
-          const dx = 550 + s * 20;
-          const dy = 60;
+        ctx.fillText(`\u65B0\u624B\u6559\u5B66  ${tut.step + 1}/${tut.totalSteps}`, 48, 63);
+        for (let s = 0; s < tut.totalSteps; s++) {
+          const dx = 398 + s * 34;
+          const dy = 62;
           ctx.beginPath();
-          ctx.arc(dx, dy, s === this.run.stageIndex ? 6.5 : 5, 0, Math.PI * 2);
-          ctx.fillStyle = s < this.run.stageIndex ? "#38b583" : s === this.run.stageIndex ? boss.accentColor : "#dccbb8";
+          ctx.arc(dx, dy, s === tut.step ? 10 : 7.5, 0, Math.PI * 2);
+          ctx.fillStyle = s < tut.step ? "#22c55e" : s === tut.step ? "#f59e0b" : "#e2d2bf";
           ctx.fill();
           ctx.strokeStyle = INK2;
-          ctx.lineWidth = 1.8;
+          ctx.lineWidth = 2.4;
           ctx.stroke();
         }
         ctx.restore();
-      }
-      this.drawPlayerBar(ctx, 1, 92);
-      this.drawStickerButton(ctx, {
-        id: "sound",
-        x: 568,
-        y: 89,
-        w: 54,
-        h: 54,
-        icon: this.sound.isMuted() ? "sound_off" : "sound_on",
-        label: this.sound.isMuted() ? "\u9759" : "\u97F3",
-        round: true,
-        accent: !this.sound.isMuted(),
-        onClick: () => {
-          const nowMuted = this.sound.toggleMute();
-          if (!nowMuted) {
-            this.sound.unlock();
-            this.sound.playChime();
-          }
-        }
-      });
-      this.drawStickerButton(ctx, {
-        id: "rules",
-        x: 634,
-        y: 89,
-        w: 54,
-        h: 54,
-        label: "?",
-        round: true,
-        onClick: () => {
-          this.showRulesModal = true;
-          this.showDebugPanel = false;
-          this.showRelicsModal = false;
-        }
-      });
-      ctx.save();
-      const isDangerIntent = this.gameMode === "roguelike" && !this.busy && this.bossIntent !== null && this.bossIntent.hasBlast;
-      ctx.fillStyle = isDangerIntent ? "rgba(255, 236, 236, 0.94)" : "rgba(255, 250, 240, 0.9)";
-      ctx.strokeStyle = isDangerIntent ? "#e54d42" : "rgba(78, 52, 46, 0.35)";
-      ctx.lineWidth = isDangerIntent ? 2.6 : 2;
-      const pillW = this.stepWaitResolver ? 500 : 672;
-      drawRoundedRect(ctx, 24, 160, pillW, 42, 21);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = isDangerIntent ? "#b91c1c" : INK2;
-      ctx.font = `700 17px ${FONT_FAMILY2}`;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      const hasStatusIcon = this.statusIcon && this.drawUiIcon(ctx, this.statusIcon, 54, 181, 26);
-      ctx.fillText(this.statusText, hasStatusIcon ? 72 : 42, 182);
-      ctx.restore();
-      if (this.stepWaitResolver) {
         this.drawStickerButton(ctx, {
-          id: "next-step",
-          x: 538,
-          y: 158,
-          w: 158,
-          h: 46,
-          label: "\u4E0B\u4E00\u8F6E",
-          accent: true,
+          id: "skip-tutorial",
+          x: 536,
+          y: 34,
+          w: 160,
+          h: 56,
+          label: "\u8DF3\u8FC7\u6559\u5B66",
+          onClick: () => this.finishTutorial(true)
+        });
+        ctx.save();
+        ctx.fillStyle = "rgba(78, 52, 46, 0.16)";
+        drawRoundedRect(ctx, 24, 112, 672, 76, 28);
+        ctx.fill();
+        ctx.fillStyle = "#fff8dc";
+        ctx.strokeStyle = "#d97706";
+        ctx.lineWidth = 4;
+        drawRoundedRect(ctx, 24, 108, 672, 76, 28);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = INK2;
+        ctx.font = `900 30px ${FONT_FAMILY2}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        this.drawTruncatedText(ctx, this.statusText || tut.prompt, VIRTUAL_W / 2, 147, 636);
+        ctx.restore();
+      } else {
+        if (this.gameMode === "roguelike") {
+          const boss = getBossProfile(this.run.stageIndex);
+          ctx.save();
+          ctx.fillStyle = "rgba(255, 250, 240, 0.92)";
+          ctx.strokeStyle = "rgba(78, 52, 46, 0.45)";
+          ctx.lineWidth = 2.2;
+          drawRoundedRect(ctx, 118, 16, 574, 34, 17);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = boss.accentColor;
+          ctx.font = `900 21px ${FONT_FAMILY2}`;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "middle";
+          ctx.fillText(`\u7B2C ${boss.stage}/3 \u5173`, 136, 34);
+          for (let s = 0; s < BOSSES.length; s++) {
+            const dx = 250 + s * 22;
+            const dy = 33;
+            ctx.beginPath();
+            ctx.arc(dx, dy, s === this.run.stageIndex ? 7.5 : 5.5, 0, Math.PI * 2);
+            ctx.fillStyle = s < this.run.stageIndex ? "#38b583" : s === this.run.stageIndex ? boss.accentColor : "#dccbb8";
+            ctx.fill();
+            ctx.strokeStyle = INK2;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+          ctx.fillStyle = INK_SOFT;
+          ctx.font = `800 21px ${FONT_FAMILY2}`;
+          ctx.textAlign = "right";
+          this.drawTruncatedText(ctx, boss.traitShort, 674, 34, 340);
+          ctx.restore();
+        }
+        this.drawPlayerBar(ctx, 1, 60);
+        this.drawStickerButton(ctx, {
+          id: "sound",
+          x: 560,
+          y: 60,
+          w: 58,
+          h: 58,
+          icon: this.sound.isMuted() ? "sound_off" : "sound_on",
+          label: this.sound.isMuted() ? "\u9759" : "\u97F3",
+          round: true,
+          accent: !this.sound.isMuted(),
           onClick: () => {
-            const resolve = this.stepWaitResolver;
-            this.stepWaitResolver = null;
-            resolve == null ? void 0 : resolve();
+            const nowMuted = this.sound.toggleMute();
+            if (!nowMuted) {
+              this.sound.unlock();
+              this.sound.playChime();
+            }
           }
         });
+        this.drawStickerButton(ctx, {
+          id: "rules",
+          x: 632,
+          y: 60,
+          w: 58,
+          h: 58,
+          label: "?",
+          round: true,
+          onClick: () => {
+            this.showRulesModal = true;
+            this.showDebugPanel = false;
+            this.showRelicsModal = false;
+          }
+        });
+        ctx.save();
+        const isBossTurn = this.gameMode === "roguelike" && this.run.phase === "battle" && this.state.player === 1;
+        ctx.fillStyle = isBossTurn ? "rgba(255, 236, 236, 0.96)" : "rgba(255, 250, 240, 0.94)";
+        ctx.strokeStyle = isBossTurn ? "#e54d42" : "rgba(78, 52, 46, 0.42)";
+        ctx.lineWidth = isBossTurn ? 3.2 : 2.4;
+        const pillW = this.stepWaitResolver ? 500 : 672;
+        drawRoundedRect(ctx, 24, 134, pillW, 56, 28);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = isBossTurn ? "#b91c1c" : INK2;
+        ctx.font = `800 26px ${FONT_FAMILY2}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        if (this.statusIcon) {
+          this.drawCenteredIconText(ctx, this.statusIcon, this.statusText, 24 + pillW / 2, 163, 30, 8);
+        } else {
+          this.drawTruncatedText(ctx, this.statusText, 24 + pillW / 2, 163, pillW - 36);
+        }
+        ctx.restore();
+        if (this.stepWaitResolver) {
+          this.drawStickerButton(ctx, {
+            id: "next-step",
+            x: 538,
+            y: 136,
+            w: 158,
+            h: 52,
+            label: "\u4E0B\u4E00\u8F6E",
+            accent: true,
+            onClick: () => {
+              const resolve = this.stepWaitResolver;
+              this.stepWaitResolver = null;
+              resolve == null ? void 0 : resolve();
+            }
+          });
+        }
       }
       ctx.save();
       ctx.translate(this.shakeOffsetX, this.shakeOffsetY);
       const activeHintCells = /* @__PURE__ */ new Set();
       const activeHighCells = /* @__PURE__ */ new Set();
       const hintPartner = /* @__PURE__ */ new Map();
-      const hintsUnlocked = this.gameMode === "roguelike" && hasHintRelic(this.run.relics);
+      const hintsUnlocked = Boolean(this.tutorial) || this.gameMode === "roguelike" && hasHintRelic(this.run.relics);
       if (hintsUnlocked && !this.isInputBlocked() && this.selected < 0 && this.grabbedCell < 0) {
         for (const [ha, hb] of this.hintSet.highValue) {
           activeHintCells.add(ha);
@@ -3551,10 +4605,14 @@
         }
       }
       const bossLockedCells = /* @__PURE__ */ new Set();
-      const activeBossSwap = (_d = this.bossHighlightSwap) != null ? _d : this.gameMode === "roguelike" && !this.busy && this.selected < 0 && this.run.phase === "battle" ? (_c = (_b = this.bossIntent) == null ? void 0 : _b.swap) != null ? _c : null : null;
-      if (activeBossSwap) {
-        bossLockedCells.add(activeBossSwap[0]);
-        bossLockedCells.add(activeBossSwap[1]);
+      if (this.bossHighlightSwap) {
+        bossLockedCells.add(this.bossHighlightSwap[0]);
+        bossLockedCells.add(this.bossHighlightSwap[1]);
+      }
+      const tutorialFocusCells = /* @__PURE__ */ new Set();
+      if (this.tutorial && !this.busy && this.grabbedCell < 0) {
+        tutorialFocusCells.add(this.tutorial.guideSwap[0]);
+        tutorialFocusCells.add(this.tutorial.guideSwap[1]);
       }
       for (let cell = 0; cell < CELL_COUNT; cell++) {
         const p = this.cellPoint(cell);
@@ -3568,7 +4626,29 @@
           cell === this.selected,
           cell === this.previewTarget && this.preview.valid
         );
-        if (activeHighCells.has(cell)) {
+        if (this.currentEvent && (this.activeEventPhase === "match" || this.activeEventPhase === "merge") && this.matchOrder.has(cell)) {
+          const order = this.matchOrder.get(cell);
+          const isCenter = this.currentEvent.centers.some((c) => c.cell === cell);
+          const lp = this.activeEventPhase === "merge" ? 1 : Math.max(
+            0,
+            Math.min(
+              1,
+              ((this.elapsed - this.phaseStart) * this.speed - order * NEST_LIGHT_STEP) / 0.22
+            )
+          );
+          if (lp > 0) this.drawLitNest(ctx, p.x, p.y, isCenter ? NEST_CENTER_RIM : NEST_MATCH_RIM, lp);
+        }
+        if (this.tutorial && !this.busy && (cell === this.tutorial.guideSwap[0] || cell === this.tutorial.guideSwap[1])) {
+          const glowAlpha = 0.28 + 0.2 * Math.sin(this.elapsed * 5.6);
+          ctx.save();
+          traceRoundedHexagon(ctx, p.x, p.y, HEX_RADIUS + 2, 12);
+          ctx.fillStyle = `rgba(74, 222, 128, ${glowAlpha.toFixed(2)})`;
+          ctx.fill();
+          ctx.strokeStyle = "#16a34a";
+          ctx.lineWidth = 4.5;
+          ctx.stroke();
+          ctx.restore();
+        } else if (activeHighCells.has(cell)) {
           const glowAlpha = 0.25 + 0.22 * Math.sin(this.elapsed * 5.2);
           ctx.save();
           traceRoundedHexagon(ctx, p.x, p.y, HEX_RADIUS - 3, 10);
@@ -3577,9 +4657,11 @@
           ctx.restore();
         }
         if (bossLockedCells.has(cell)) {
-          const pulseW = this.bossHighlightSwap ? 5.5 : 3.6 + Math.sin(this.elapsed * 6) * 0.8;
+          const pulseW = this.bossHighlightSwap ? 5.8 : 4 + Math.sin(this.elapsed * 6) * 0.9;
           ctx.save();
           traceRoundedHexagon(ctx, p.x, p.y, HEX_RADIUS + 2, 12);
+          ctx.fillStyle = "rgba(239, 68, 68, 0.14)";
+          ctx.fill();
           ctx.strokeStyle = this.bossHighlightSwap ? "#dc2626" : "#ef4444";
           ctx.lineWidth = pulseW;
           ctx.setLineDash([8, 6]);
@@ -3739,45 +4821,7 @@
         }
       } else if (this.currentEvent) {
         const ev = this.currentEvent;
-        if (this.activeEventPhase === "match") {
-          const matchedCells = /* @__PURE__ */ new Set();
-          for (const line of ev.lines) {
-            for (const c of line.cells) matchedCells.add(c);
-          }
-          ctx.save();
-          for (const cell of matchedCells) {
-            const p = this.cellPoint(cell);
-            ctx.strokeStyle = "#f59e0b";
-            ctx.lineWidth = 4.5;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 49, 0, Math.PI * 2);
-            ctx.stroke();
-          }
-          for (const center of ev.centers) {
-            const p = this.cellPoint(center.cell);
-            ctx.strokeStyle = "#38b583";
-            ctx.lineWidth = 4.8;
-            ctx.setLineDash([8, 6]);
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 54, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }
-          ctx.restore();
-        } else if (this.activeEventPhase === "merge") {
-          ctx.save();
-          for (const center of ev.centers) {
-            const p = this.cellPoint(center.cell);
-            ctx.strokeStyle = center.resultLevel === 3 ? "#d946ef" : "#38b583";
-            ctx.lineWidth = 5;
-            ctx.setLineDash([8, 6]);
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 54, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }
-          ctx.restore();
-        } else if (this.activeEventPhase === "wave" && this.activeWaveIndex >= 0) {
+        if (this.activeEventPhase === "wave" && this.activeWaveIndex >= 0) {
           const wave = ev.waves[this.activeWaveIndex];
           if (wave) {
             const col = WAVE_COLORS[Math.min(wave.wave, WAVE_COLORS.length - 1)];
@@ -3816,20 +4860,21 @@
           }
         }
       }
-      if (activeBossSwap && !overlayEvent) {
-        const a = this.cellPoint(activeBossSwap[0]);
-        const b = this.cellPoint(activeBossSwap[1]);
-        this.drawSimpleArrow(
-          ctx,
-          a.x,
-          a.y,
-          b.x,
-          b.y,
-          this.bossHighlightSwap ? "#dc2626" : "#ef4444",
-          this.bossHighlightSwap ? 6 : 4.2
-        );
+      if (this.tutorial && tutorialFocusCells.size > 0 && !overlayEvent) {
+        ctx.save();
+        ctx.fillStyle = "rgba(62, 40, 32, 0.24)";
+        for (let cell = 0; cell < CELL_COUNT; cell++) {
+          if (tutorialFocusCells.has(cell)) continue;
+          const p = this.cellPoint(cell);
+          traceRoundedHexagon(ctx, p.x, p.y, HEX_RADIUS + 1, 11);
+          ctx.fill();
+        }
+        ctx.restore();
       }
-      if (this.state.suggested && this.state.turn === 1 && !this.busy && this.selected < 0 && !overlayEvent) {
+      if (this.tutorial && !this.busy && this.grabbedCell < 0 && !overlayEvent) {
+        this.drawTutorialGuide(ctx, this.tutorial.guideSwap);
+      }
+      if (!this.tutorial && this.state.suggested && this.state.turn === 1 && !this.busy && this.selected < 0 && !overlayEvent) {
         const a = this.cellPoint(this.state.suggested[0]);
         const b = this.cellPoint(this.state.suggested[1]);
         this.drawSimpleArrow(ctx, a.x, a.y, b.x, b.y, "#f59e0b", 6);
@@ -3863,7 +4908,9 @@
           );
         }
       }
+      this.renderBossAim(ctx);
       ctx.restore();
+      this.renderTurnTint(ctx);
       for (const f of this.floatings) {
         ctx.save();
         ctx.globalAlpha = Math.max(0, f.life / f.maxLife);
@@ -3876,332 +4923,558 @@
         ctx.fillText(f.text, f.x, f.y);
         ctx.restore();
       }
-      this.drawPlayerBar(ctx, 0, 1054);
-      if (this.gameMode === "roguelike" && this.run.relics.length > 0) {
-        const count = this.run.relics.length;
-        const badgeW = count >= 3 ? 184 : 186;
-        const gap = 12;
-        const startX = count >= 3 ? 116 : 128;
-        const badgeY = 1e3;
-        for (let i = 0; i < count; i++) {
-          const def = getRelicDef(this.run.relics[i]);
-          const rx = startX + i * (badgeW + gap);
-          ctx.save();
-          ctx.fillStyle = "rgba(255, 250, 240, 0.94)";
-          ctx.strokeStyle = def.badgeColor;
-          ctx.lineWidth = 2.6;
-          drawRoundedRect(ctx, rx, badgeY, badgeW, 38, 19);
-          ctx.fill();
-          ctx.stroke();
-          const icon = this.assets.relics[def.branch];
-          if (icon.ready) {
-            ctx.drawImage(icon.el, rx + 5, badgeY + 2, 34, 34);
+      if (this.tutorial) {
+        ctx.save();
+        ctx.fillStyle = "rgba(255, 250, 240, 0.94)";
+        ctx.strokeStyle = "rgba(78, 52, 46, 0.36)";
+        ctx.lineWidth = 2.6;
+        drawRoundedRect(ctx, 48, 1084, 624, 64, 32);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = INK2;
+        ctx.font = `800 25px ${FONT_FAMILY2}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        this.drawTruncatedText(ctx, "\u6309\u4F4F\u4E00\u53EA\u53D1\u5149\u732B\u732B\uFF0C\u62D6\u5230\u65C1\u8FB9\u4EA4\u6362\u4F4D\u7F6E", VIRTUAL_W / 2, 1117, 588);
+        ctx.restore();
+      } else {
+        this.drawPlayerBar(ctx, 0, 1070);
+        if (this.gameMode === "roguelike" && this.run.relics.length > 0) {
+          const count = this.run.relics.length;
+          const badgeW = count >= 3 ? 196 : 230;
+          const badgeH = 48;
+          const gap = 12;
+          const startX = count >= 3 ? 100 : 118;
+          const badgeY = 1010;
+          for (let i = 0; i < count; i++) {
+            const def = getRelicDef(this.run.relics[i]);
+            const rx = startX + i * (badgeW + gap);
+            this.buttons.push({
+              id: `relic-badge-${def.id}`,
+              x: rx,
+              y: badgeY,
+              w: badgeW,
+              h: badgeH,
+              label: def.name,
+              onClick: () => {
+                this.showRelicsModal = true;
+                this.showRulesModal = false;
+                this.showDebugPanel = false;
+              }
+            });
+            ctx.save();
+            ctx.fillStyle = "rgba(78, 52, 46, 0.14)";
+            drawRoundedRect(ctx, rx, badgeY + 3, badgeW, badgeH, 24);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255, 250, 240, 0.96)";
+            ctx.strokeStyle = def.badgeColor;
+            ctx.lineWidth = 3;
+            drawRoundedRect(ctx, rx, badgeY, badgeW, badgeH, 24);
+            ctx.fill();
+            ctx.stroke();
+            const icon = this.assets.relics[def.branch];
+            if (icon.ready) {
+              ctx.drawImage(icon.el, rx + 7, badgeY + 4, 40, 40);
+            }
+            ctx.fillStyle = INK2;
+            ctx.font = `900 22px ${FONT_FAMILY2}`;
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            this.drawTruncatedText(ctx, def.name, rx + 52, badgeY + badgeH / 2 + 1, badgeW - 64);
+            ctx.restore();
           }
-          ctx.fillStyle = INK2;
-          ctx.font = `800 15px ${FONT_FAMILY2}`;
-          ctx.textAlign = "left";
-          ctx.textBaseline = "middle";
-          ctx.fillText(def.name, rx + 44, badgeY + 20);
-          ctx.restore();
+        }
+        const btnY = 1144;
+        const btnH = 58;
+        if (this.gameMode === "roguelike") {
+          this.drawStickerButton(ctx, {
+            id: "rogue-new",
+            x: 24,
+            y: btnY,
+            w: 326,
+            h: btnH,
+            label: "\u91CD\u5F00\u95EF\u5173",
+            disabled: this.busy,
+            onClick: () => this.startNewRoguelikeRun(
+              Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999)
+            )
+          });
+          this.drawStickerButton(ctx, {
+            id: "speed",
+            x: 370,
+            y: btnY,
+            w: 326,
+            h: btnH,
+            label: `\u901F\u5EA6 ${this.speed}\xD7`,
+            accent: this.speed > 1,
+            onClick: () => {
+              this.speed = this.speed === 1 ? 2 : 1;
+            }
+          });
+        } else {
+          this.drawStickerButton(ctx, {
+            id: "to-rogue",
+            x: 24,
+            y: btnY,
+            w: 212,
+            h: btnH,
+            label: "\u8089\u9E3D\u95EF\u5173",
+            accent: true,
+            disabled: this.busy,
+            onClick: () => this.startNewRoguelikeRun(
+              Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999)
+            )
+          });
+          this.drawStickerButton(ctx, {
+            id: "new",
+            x: 254,
+            y: btnY,
+            w: 212,
+            h: btnH,
+            label: "\u65B0\u68CB\u76D8",
+            disabled: this.busy,
+            onClick: () => this.startNewGame(Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999))
+          });
+          this.drawStickerButton(ctx, {
+            id: "speed",
+            x: 484,
+            y: btnY,
+            w: 212,
+            h: btnH,
+            label: `\u901F\u5EA6 ${this.speed}\xD7`,
+            accent: this.speed > 1,
+            onClick: () => {
+              this.speed = this.speed === 1 ? 2 : 1;
+            }
+          });
         }
       }
-      const btnY = 1124;
-      const btnH = 50;
-      if (this.gameMode === "roguelike") {
-        this.drawStickerButton(ctx, {
-          id: "rogue-new",
-          x: 24,
-          y: btnY,
-          w: 132,
-          h: btnH,
-          label: "\u91CD\u5F00\u95EF\u5173",
-          disabled: this.busy,
-          onClick: () => this.startNewRoguelikeRun(
-            Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999)
-          )
-        });
-        this.drawStickerButton(ctx, {
-          id: "relics",
-          x: 166,
-          y: btnY,
-          w: 130,
-          h: btnH,
-          label: `\u795D\u798F(${this.run.relics.length})`,
-          accent: this.showRelicsModal || this.run.relics.length > 0,
-          onClick: () => {
-            this.showRelicsModal = !this.showRelicsModal;
-            this.showRulesModal = false;
-            this.showDebugPanel = false;
-          }
-        });
-        this.drawStickerButton(ctx, {
-          id: "speed",
-          x: 306,
-          y: btnY,
-          w: 122,
-          h: btnH,
-          label: `\u901F\u5EA6 ${this.speed}\xD7`,
-          onClick: () => {
-            this.speed = this.speed === 1 ? 2 : 1;
-          }
-        });
-        this.drawStickerButton(ctx, {
-          id: "to-pvp",
-          x: 438,
-          y: btnY,
-          w: 124,
-          h: btnH,
-          label: "\u53CC\u4EBA\u6A21\u5F0F",
-          disabled: this.busy,
-          onClick: () => this.startNewGame(Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999))
-        });
-        this.drawStickerButton(ctx, {
-          id: "shake",
-          x: 572,
-          y: btnY,
-          w: 124,
-          h: btnH,
-          label: `\u9707\u5C4F ${this.shakeEnabled ? "\u5F00" : "\u5173"}`,
-          onClick: () => {
-            this.shakeEnabled = !this.shakeEnabled;
-          }
-        });
-      } else {
-        this.drawStickerButton(ctx, {
-          id: "to-rogue",
-          x: 24,
-          y: btnY,
-          w: 126,
-          h: btnH,
-          label: "\u8089\u9E3D\u95EF\u5173",
-          accent: true,
-          disabled: this.busy,
-          onClick: () => this.startNewRoguelikeRun(
-            Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999)
-          )
-        });
-        this.drawStickerButton(ctx, {
-          id: "new",
-          x: 160,
-          y: btnY,
-          w: 112,
-          h: btnH,
-          label: "\u65B0\u68CB\u76D8",
-          disabled: this.busy,
-          onClick: () => this.startNewGame(Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999))
-        });
-        this.drawStickerButton(ctx, {
-          id: "speed",
-          x: 282,
-          y: btnY,
-          w: 122,
-          h: btnH,
-          label: `\u901F\u5EA6 ${this.speed}\xD7`,
-          onClick: () => {
-            this.speed = this.speed === 1 ? 2 : 1;
-          }
-        });
-        this.drawStickerButton(ctx, {
-          id: "debug",
-          x: 414,
-          y: btnY,
-          w: 124,
-          h: btnH,
-          label: "\u5B9E\u9A8C\u53F0",
-          accent: this.showDebugPanel,
-          onClick: () => {
-            this.showDebugPanel = !this.showDebugPanel;
-            this.showRulesModal = false;
-            this.selected = -1;
-            this.clearPreview();
-          }
-        });
-        this.drawStickerButton(ctx, {
-          id: "shake",
-          x: 548,
-          y: btnY,
-          w: 148,
-          h: btnH,
-          label: `\u9707\u5C4F ${this.shakeEnabled ? "\u5F00" : "\u5173"}`,
-          onClick: () => {
-            this.shakeEnabled = !this.shakeEnabled;
-          }
-        });
-      }
-      ctx.fillStyle = INK_SOFT;
-      ctx.font = `600 14px ${FONT_FAMILY2}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
-      const footerText = this.gameMode === "roguelike" ? `CAT BOOM \u8089\u9E3D MVP  \xB7  \u7B2C ${this.run.stageIndex + 1}/3 \u5173  \xB7  \u5DF2\u9009\u795D\u798F ${this.run.relics.length}  \xB7  \u5408\u6CD5\u4EA4\u6362 ${this.legalCount}` : `CAT BOOM \u53CC\u4EBA\u6A21\u5F0F  \xB7  \u56DE\u5408 ${this.state.turn}  \xB7  SEED ${this.state.seed}  \xB7  \u5408\u6CD5\u4EA4\u6362 ${this.legalCount}`;
-      ctx.fillText(footerText, VIRTUAL_W / 2, 1204);
       if (this.bannerLife > 0 && this.bannerText) {
         const alpha = Math.min(1, this.bannerLife / 0.35, (this.bannerMaxLife - this.bannerLife) / 0.15 + 0.2);
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-        const bw = 590;
-        const bh = 62;
+        const bw = 610;
+        const bh = 70;
         const bx = (VIRTUAL_W - bw) / 2;
-        const by = 520;
+        const by = 516;
         ctx.fillStyle = "#fff9e6";
         ctx.strokeStyle = "#d97706";
-        ctx.lineWidth = 4.5;
-        drawRoundedRect(ctx, bx, by, bw, bh, 31);
+        ctx.lineWidth = 4.8;
+        drawRoundedRect(ctx, bx, by, bw, bh, 35);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = INK2;
-        ctx.font = `900 22px ${FONT_FAMILY2}`;
+        ctx.font = `900 28px ${FONT_FAMILY2}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        this.drawCenteredIconText(ctx, this.bannerIcon, this.bannerText, VIRTUAL_W / 2, by + bh / 2 + 1, 32, 8);
+        this.drawCenteredIconText(ctx, this.bannerIcon, this.bannerText, VIRTUAL_W / 2, by + bh / 2 + 1, 36, 10);
         ctx.restore();
       }
       if (this.comboTracker && !this.stepWaitResolver) {
         this.renderComboTracker(ctx, this.comboTracker);
       }
+      this.renderDamageFlyers(ctx);
+      this.renderTurnIntro(ctx);
       if (this.showRulesModal) {
         this.renderRulesModal(ctx);
       } else if (this.showRelicsModal) {
         this.renderRelicsModal(ctx);
       } else if (this.showDebugPanel) {
         this.renderDebugPanel(ctx);
-      } else if (this.gameMode === "roguelike" && (this.run.phase === "opening_reward" || this.run.phase === "reward")) {
+      } else if (!this.tutorial && this.gameMode === "roguelike" && this.run.phase === "reward") {
         this.renderRewardModal(ctx);
-      } else if (this.gameMode === "roguelike" && (this.run.phase === "victory" || this.run.phase === "defeat")) {
+      } else if (!this.tutorial && this.gameMode === "roguelike" && (this.run.phase === "victory" || this.run.phase === "defeat")) {
         this.renderRunEndModal(ctx);
       }
       ctx.restore();
     }
     renderComboTracker(ctx, ct) {
-      const fadeAlpha = ct.active ? 1 : Math.max(0, Math.min(1, ct.holdLife / 0.45));
-      if (fadeAlpha <= 0.01) return;
+      const exitK = ct.active ? 0 : 1 - Math.max(0, Math.min(1, ct.holdLife / 0.45));
+      const enterK = Math.min(1, ct.age / 0.34);
+      const alpha = Math.min(1, ct.age / 0.12) * (1 - exitK);
+      if (alpha <= 0.01) return;
       const x = 24;
-      const y = 152;
+      const y = 114;
       const w = 672;
-      const h = 88;
+      const h = 94;
       const accent = ct.isPlayer ? "#e67e22" : "#dc2626";
+      const tierColor = COMBO_TIER_COLORS[ct.tier];
+      const combo = ct.comboShown;
+      const isBlast = ct.blastWaves > 1;
+      const stampColor = isBlast ? WAVE_COLORS[Math.max(0, Math.min(combo - 1, WAVE_COLORS.length - 1))] : "#d97706";
       ctx.save();
-      ctx.globalAlpha = fadeAlpha;
+      ctx.globalAlpha = alpha;
+      const slideX = (1 - easeBackOut(enterK)) * -120;
+      const shakeX = Math.sin(ct.age * 90) * ct.shake * 6;
+      const shakeY = Math.cos(ct.age * 70) * ct.shake * 3;
+      const cardScale = 1 + 0.035 * Math.sin(ct.pulse * Math.PI);
+      ctx.translate(x + w / 2 + slideX + shakeX, y + h / 2 - exitK * 36 + shakeY);
+      ctx.scale(cardScale, cardScale);
+      ctx.translate(-(x + w / 2), -(y + h / 2));
+      if (combo >= 2) {
+        const glow = 0.5 + 0.5 * Math.sin(ct.age * 9);
+        ctx.save();
+        ctx.globalAlpha = alpha * (0.2 + 0.25 * glow);
+        ctx.strokeStyle = stampColor;
+        ctx.lineWidth = 14;
+        drawRoundedRect(ctx, x, y, w, h, 24);
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.fillStyle = "rgba(78, 52, 46, 0.18)";
-      drawRoundedRect(ctx, x, y + 4, w, h, 20);
+      drawRoundedRect(ctx, x, y + 4, w, h, 24);
       ctx.fill();
-      ctx.fillStyle = ct.isPlayer ? "rgba(255, 251, 240, 0.97)" : "rgba(255, 242, 242, 0.97)";
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 3.2;
-      drawRoundedRect(ctx, x, y, w, h, 20);
+      ctx.fillStyle = ct.isPlayer ? "rgba(255, 251, 240, 0.98)" : "rgba(255, 242, 242, 0.98)";
+      drawRoundedRect(ctx, x, y, w, h, 24);
       ctx.fill();
+      if (combo >= 2) {
+        ctx.save();
+        drawRoundedRect(ctx, x, y, w, h, 24);
+        ctx.clip();
+        ctx.globalAlpha = alpha * 0.12;
+        ctx.fillStyle = stampColor;
+        const gap = 44;
+        const off = ct.age * 160 % gap;
+        for (let sx = x - h - gap + off; sx < x + w + gap; sx += gap) {
+          ctx.beginPath();
+          ctx.moveTo(sx, y + h);
+          ctx.lineTo(sx + 18, y + h);
+          ctx.lineTo(sx + 18 + h * 0.6, y);
+          ctx.lineTo(sx + h * 0.6, y);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      ctx.strokeStyle = combo >= 2 ? stampColor : accent;
+      ctx.lineWidth = 3.6;
+      drawRoundedRect(ctx, x, y, w, h, 24);
       ctx.stroke();
       ctx.fillStyle = INK_SOFT;
-      ctx.font = `800 14px ${FONT_FAMILY2}`;
+      ctx.font = `800 20px ${FONT_FAMILY2}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      const metaParts = [`${ct.actorLabel} \xB7 \u8FDE\u51FB\u6218\u62A5`];
-      if (ct.rounds > 0) metaParts.push(`${ct.rounds}\u8F6E`);
-      if (ct.blastWaves > 0) metaParts.push(`${ct.blastWaves}\u6CE2\u7206`);
-      ctx.fillText(metaParts.join(" \xB7 "), x + 18, y + 23);
-      const popScale = 1 + 0.22 * Math.sin(ct.pulse * Math.PI);
+      this.drawTruncatedText(ctx, ct.actorLabel, x + 22, y + 22, 150);
+      const numCy = y + 62;
+      if (ct.burst > 0) {
+        ctx.save();
+        ctx.translate(x + 112, numCy);
+        ctx.rotate(ct.age * 2.5);
+        ctx.globalAlpha = alpha * ct.burst * 0.7;
+        ctx.fillStyle = tierColor;
+        const R = 40 + 56 * (1 - ct.burst);
+        for (let k = 0; k < 12; k++) {
+          const a = k / 12 * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a - 0.09) * 14, Math.sin(a - 0.09) * 14);
+          ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R);
+          ctx.lineTo(Math.cos(a + 0.09) * 14, Math.sin(a + 0.09) * 14);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      const dmgInt = Math.floor(ct.shownDamage + 1e-4);
+      const numText = `${dmgInt}`;
       ctx.save();
-      ctx.translate(x + 18, y + 58);
-      ctx.scale(popScale, popScale);
-      ctx.fillStyle = ct.isPlayer ? "#d9534f" : "#b91c1c";
-      ctx.font = `900 32px ${FONT_FAMILY2}`;
+      const pop = 1 + 0.2 * ct.tickPop + 0.12 * Math.sin(ct.pulse * Math.PI);
+      ctx.translate(x + 22, numCy);
+      ctx.rotate(-0.05 * ct.tickPop);
+      ctx.scale(pop, pop);
+      ctx.transform(1, 0, -0.14, 1, 0, 0);
+      const hasIcon = this.drawUiIcon(ctx, "blast", 18, 0, 36);
+      const tx0 = hasIcon ? 42 : 0;
+      ctx.font = `900 ${numText.length >= 3 ? 44 : 52}px ${FONT_FAMILY2}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      const hasBlastIcon = this.drawUiIcon(ctx, "blast", 15, 0, 30);
-      ctx.fillText(`${ct.totalDamage} \u4F24`, hasBlastIcon ? 36 : 0, 0);
+      ctx.lineJoin = "round";
+      const numW = ctx.measureText(numText).width;
+      let numFill = tierColor;
+      if (ct.tier === 3) {
+        const shift = (Math.sin(ct.age * 6) + 1) / 2;
+        const g = ctx.createLinearGradient(tx0, -24, tx0 + numW, 24);
+        g.addColorStop(0, "#a855f7");
+        g.addColorStop(0.3 + 0.4 * shift, "#ec4899");
+        g.addColorStop(1, "#f59e0b");
+        numFill = g;
+      }
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 12;
+      ctx.strokeText(numText, tx0, 0);
+      ctx.strokeStyle = INK2;
+      ctx.lineWidth = 5;
+      ctx.strokeText(numText, tx0, 0);
+      ctx.fillStyle = numFill;
+      ctx.fillText(numText, tx0, 0);
+      ctx.font = `900 26px ${FONT_FAMILY2}`;
+      const ux = tx0 + numW + 6;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 7;
+      ctx.strokeText("\u4F24", ux, 8);
+      ctx.fillStyle = INK2;
+      ctx.fillText("\u4F24", ux, 8);
       ctx.restore();
-      if (ct.trueDamage > 0 || ct.shieldBlocked > 0) {
-        const tagText = ct.trueDamage > 0 ? `\u771F\u4F24 ${ct.trueDamage}` : `\u76FE\u6321 ${ct.shieldBlocked}`;
-        ctx.fillStyle = ct.trueDamage > 0 ? "#7e22ce" : "#1d4ed8";
-        ctx.font = `800 13px ${FONT_FAMILY2}`;
-        ctx.textAlign = "right";
+      if (combo >= 2) {
+        const sl = ct.stampLife;
+        const s = 1 + 1.3 * sl * sl;
+        const scx = x + 222;
+        const scy = y + 30;
+        if (sl > 0 && sl < 0.45) {
+          const k = 1 - sl / 0.45;
+          ctx.save();
+          ctx.globalAlpha = alpha * (1 - k) * 0.8;
+          ctx.strokeStyle = stampColor;
+          ctx.lineWidth = 5 * (1 - k) + 1;
+          ctx.beginPath();
+          ctx.arc(scx, scy, 30 + 60 * k, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+        ctx.save();
+        ctx.translate(scx, scy);
+        ctx.rotate(-0.16 - 0.5 * sl);
+        ctx.scale(s, s);
+        ctx.globalAlpha = alpha * (1 - 0.6 * sl);
+        const bw = 92;
+        const bh = 38;
+        ctx.fillStyle = stampColor;
+        drawRoundedRect(ctx, -bw / 2, -bh / 2, bw, bh, 12);
+        ctx.fill();
+        ctx.lineWidth = 3.4;
+        ctx.strokeStyle = INK2;
+        ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+        drawRoundedRect(ctx, -bw / 2 + 4, -bh / 2 + 4, bw - 8, bh - 8, 9);
+        ctx.stroke();
+        ctx.fillStyle = "#ffffff";
         ctx.textBaseline = "middle";
-        ctx.fillText(tagText, x + 238, y + 60);
+        ctx.font = `900 24px ${FONT_FAMILY2}`;
+        ctx.textAlign = "right";
+        ctx.fillText(`\xD7${combo}`, 4, 1);
+        ctx.font = `900 16px ${FONT_FAMILY2}`;
+        ctx.textAlign = "left";
+        ctx.fillText(isBlast ? "\u8FDE\u7206" : "\u8FDE\u9501", 6, 2);
+        ctx.restore();
       }
       ctx.strokeStyle = "rgba(78, 52, 46, 0.24)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([5, 5]);
       ctx.beginPath();
-      ctx.moveTo(x + 250, y + 14);
-      ctx.lineTo(x + 250, y + h - 14);
+      ctx.moveTo(x + 278, y + 14);
+      ctx.lineTo(x + 278, y + h - 14);
       ctx.stroke();
       ctx.setLineDash([]);
-      const recent = ct.logs.slice(-3);
+      const recent = ct.logs.slice(-2);
       if (recent.length === 0) {
         ctx.fillStyle = INK_SOFT;
-        ctx.font = `700 16px ${FONT_FAMILY2}`;
+        ctx.font = `800 24px ${FONT_FAMILY2}`;
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillText("\u6B63\u5728\u7ED3\u7B97\u672C\u56DE\u5408\u8FDE\u51FB...", x + 266, y + h / 2);
+        ctx.fillText("\u653B\u51FB\u7ED3\u7B97\u4E2D...", x + 298, y + h / 2);
       } else {
-        const rowH = 24;
+        const rowH = 36;
         const startY = y + (h - recent.length * rowH) / 2 + rowH / 2;
+        const slide = ct.logSlide;
         recent.forEach((entry, idx) => {
-          const ry = startY + idx * rowH;
           const isLatest = idx === recent.length - 1;
+          const baseY = startY + idx * rowH;
+          const ry = isLatest ? baseY : baseY + rowH * slide;
+          const ox = isLatest ? slide * 70 : 0;
+          ctx.save();
+          ctx.globalAlpha = alpha * (isLatest ? 1 - slide * 0.9 : 1);
           ctx.fillStyle = isLatest ? INK2 : INK_SOFT;
-          ctx.font = `${isLatest ? "800" : "600"} 15px ${FONT_FAMILY2}`;
+          ctx.font = `${isLatest ? "900" : "700"} 22px ${FONT_FAMILY2}`;
           ctx.textAlign = "left";
           ctx.textBaseline = "middle";
-          ctx.fillText(entry.label, x + 266, ry);
-          ctx.fillStyle = entry.color;
-          ctx.font = `900 ${isLatest ? 17 : 15}px ${FONT_FAMILY2}`;
+          this.drawTruncatedText(ctx, entry.label, x + 298 + ox, ry, 256);
+          ctx.translate(x + w - 22 + ox, ry);
+          const dPop = isLatest ? 1 + 0.5 * slide : 1;
+          ctx.scale(dPop, dPop);
+          ctx.font = `900 ${isLatest ? 24 : 22}px ${FONT_FAMILY2}`;
           ctx.textAlign = "right";
-          ctx.fillText(entry.deltaText, x + w - 18, ry);
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 5;
+          ctx.strokeText(entry.deltaText, 0, 0);
+          ctx.fillStyle = entry.color;
+          ctx.fillText(entry.deltaText, 0, 0);
+          ctx.restore();
         });
+      }
+      if (ct.sweep >= 0 && ct.sweep < 1) {
+        ctx.save();
+        drawRoundedRect(ctx, x, y, w, h, 24);
+        ctx.clip();
+        const bx = x - 120 + (w + 240) * easeCubicInOut(ct.sweep);
+        const g = ctx.createLinearGradient(bx - 70, 0, bx + 70, 0);
+        g.addColorStop(0, "rgba(255, 255, 255, 0)");
+        g.addColorStop(0.5, "rgba(255, 255, 255, 0.8)");
+        g.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(bx - 70 + 24, y);
+        ctx.lineTo(bx + 70 + 24, y);
+        ctx.lineTo(bx + 70 - 24, y + h);
+        ctx.lineTo(bx - 70 - 24, y + h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       }
       ctx.restore();
     }
+    /** 铺满整个真实屏幕的柔和暖棕遮罩，并屏蔽底层按钮穿透点击 */
+    drawModalBackdrop(ctx, fillStyle = "rgba(62, 40, 32, 0.36)") {
+      this.buttons = [];
+      const safeScale = Math.max(0.01, this.scale);
+      const left = -this.offsetX / safeScale - 4;
+      const top = -this.offsetY / safeScale - 4;
+      const fullW = this.platform.width / safeScale + 8;
+      const fullH = this.platform.height / safeScale + 8;
+      ctx.save();
+      ctx.fillStyle = fillStyle;
+      ctx.fillRect(left, top, fullW, fullH);
+      ctx.restore();
+    }
+    /** 按像素宽度自动换行（兼容中英文混排） */
+    wrapTextLines(ctx, text, maxWidth) {
+      const lines = [];
+      let current = "";
+      for (const ch of text) {
+        const next = current + ch;
+        if (current.length > 0 && ctx.measureText(next).width > maxWidth) {
+          lines.push(current);
+          current = ch;
+        } else {
+          current = next;
+        }
+      }
+      if (current) lines.push(current);
+      return lines;
+    }
+    /** 单行防溢出绘制，超宽自动追加省略号 */
+    drawTruncatedText(ctx, text, x, y, maxWidth) {
+      if (ctx.measureText(text).width <= maxWidth) {
+        ctx.fillText(text, x, y);
+        return;
+      }
+      let out = text;
+      while (out.length > 1 && ctx.measureText(`${out}\u2026`).width > maxWidth) {
+        out = out.slice(0, -1);
+      }
+      ctx.fillText(`${out}\u2026`, x, y);
+    }
     renderRewardModal(ctx) {
-      ctx.fillStyle = "rgba(78, 52, 46, 0.56)";
-      ctx.fillRect(0, 0, VIRTUAL_W, VIRTUAL_H);
-      const x = 32;
-      const y = 148;
-      const w = 656;
-      const h = 860;
-      ctx.fillStyle = "#fffaf0";
+      var _a, _b;
+      this.drawModalBackdrop(ctx, "rgba(62, 40, 32, 0.38)");
+      const clearedBoss = getBossProfile(this.run.stageIndex);
+      const nextBoss = getBossProfile(this.run.stageIndex + 1);
+      const w = 676;
+      const x = (VIRTUAL_W - w) / 2;
+      const cardW = 628;
+      const cardX = x + (w - cardW) / 2;
+      const baseCardH = 186;
+      const gap = 18;
+      ctx.save();
+      ctx.font = `700 21px ${FONT_FAMILY2}`;
+      const cardSpecs = this.run.rewardChoices.map((relicId) => {
+        const def = getRelicDef(relicId);
+        const isExpanded = this.expandedRewardRelicId === relicId;
+        const detailLines = isExpanded ? this.wrapTextLines(ctx, def.detailDesc, cardW - 64) : [];
+        const detailH = isExpanded ? detailLines.length * 30 + 30 : 0;
+        return {
+          relicId,
+          def,
+          isExpanded,
+          detailLines,
+          detailH,
+          height: baseCardH + detailH
+        };
+      });
+      ctx.restore();
+      const headerH = 230;
+      const cardsTotalH = cardSpecs.reduce((sum, item) => sum + item.height, 0) + Math.max(0, cardSpecs.length - 1) * gap;
+      const h = headerH + cardsTotalH + 28;
+      const y = Math.max(30, Math.round((VIRTUAL_H - h) / 2));
+      ctx.save();
+      ctx.fillStyle = "rgba(78, 52, 46, 0.24)";
+      drawRoundedRect(ctx, x, y + 8, w, h, 32);
+      ctx.fill();
+      ctx.fillStyle = "#fff9ee";
+      drawRoundedRect(ctx, x, y, w, h, 32);
+      ctx.fill();
+      ctx.save();
+      drawRoundedRect(ctx, x, y, w, h, 32);
+      ctx.clip();
+      ctx.fillStyle = "#ffefc8";
+      ctx.fillRect(x, y, w, 132);
+      ctx.strokeStyle = "rgba(217, 119, 6, 0.24)";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.moveTo(x + 24, y + 132);
+      ctx.lineTo(x + w - 24, y + 132);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
       ctx.strokeStyle = INK2;
       ctx.lineWidth = 4.5;
-      drawRoundedRect(ctx, x, y, w, h, 28);
-      ctx.fill();
+      drawRoundedRect(ctx, x, y, w, h, 32);
       ctx.stroke();
-      const isOpening = this.run.phase === "opening_reward";
-      const clearedBoss = getBossProfile(this.run.stageIndex);
-      const nextBoss = getBossProfile(isOpening ? 0 : this.run.stageIndex + 1);
-      ctx.fillStyle = "#d97706";
-      ctx.font = `900 30px ${FONT_FAMILY2}`;
+      ctx.fillStyle = "#c2610c";
+      ctx.font = `900 38px ${FONT_FAMILY2}`;
       ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
+      ctx.textBaseline = "middle";
       this.drawCenteredIconText(
         ctx,
-        isOpening ? "gift" : "trophy",
-        isOpening ? "\u732B\u795E\u8D77\u624B\u793C \xB7 \u5F00\u5C40 3 \u9009 1" : `\u51FB\u8D25 ${clearedBoss.name}\uFF01`,
+        "trophy",
+        `\u51FB\u8D25 ${clearedBoss.name}\uFF01`,
         VIRTUAL_W / 2,
-        y + 47,
-        38,
-        8
+        y + 48,
+        44,
+        10
       );
       ctx.fillStyle = INK_SOFT;
-      ctx.font = `700 18px ${FONT_FAMILY2}`;
+      ctx.font = `800 24px ${FONT_FAMILY2}`;
       ctx.fillText(
-        isOpening ? "\u5148\u9009 1 \u4E2A\u521D\u59CB\u6D41\u6D3E\u795D\u798F\uFF0C\u5E26\u7740\u4E13\u5C5E\u673A\u5236\u5F00\u542F 3 \u5173\u8089\u9E3D\u95EF\u5173\uFF01" : `\u5DF2\u56DE\u590D +${STAGE_CLEAR_HEAL} HP\uFF08\u5F53\u524D ${this.run.playerHp}/${this.run.playerMaxHp}\uFF09 \xB7 \u9009\u62E9 1 \u4E2A\u6D41\u6D3E\u795D\u798F`,
+        `\u56DE +${STAGE_CLEAR_HEAL} \u8840 \xB7 \u9009 1 \u4E2A\u795D\u798F`,
         VIRTUAL_W / 2,
-        y + 96
+        y + 100
       );
-      ctx.fillStyle = "#b45309";
-      ctx.font = `700 16px ${FONT_FAMILY2}`;
+      const previewX = cardX;
+      const previewY = y + 146;
+      const previewW = cardW;
+      const previewH = 68;
+      ctx.fillStyle = "#fffdf7";
+      ctx.strokeStyle = nextBoss.accentColor;
+      ctx.lineWidth = 2.8;
+      drawRoundedRect(ctx, previewX, previewY, previewW, previewH, 22);
+      ctx.fill();
+      ctx.stroke();
+      const bossAvatar = this.assets.bosses[nextBoss.id];
+      if (bossAvatar.ready) {
+        ctx.drawImage(bossAvatar.el, previewX + 10, previewY + 6, 56, 56);
+      }
+      ctx.fillStyle = nextBoss.accentColor;
+      ctx.font = `900 23px ${FONT_FAMILY2}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
       ctx.fillText(
-        `${isOpening ? "\u7B2C 1 \u5173\u9884\u544A" : "\u4E0B\u4E00\u5173\u9884\u544A"}\uFF1A\u7B2C ${nextBoss.stage} \u5173 ${nextBoss.name}\uFF08${nextBoss.traitShort}\uFF09`,
-        VIRTUAL_W / 2,
-        y + 128
+        `\u7B2C ${nextBoss.stage} \u5173 \xB7 ${nextBoss.name}`,
+        previewX + 76,
+        previewY + 23
       );
-      const cardW = 596;
-      const cardH = 192;
-      const cardX = x + (w - cardW) / 2;
-      const startY = y + 160;
-      const gap = 22;
-      this.run.rewardChoices.forEach((relicId, idx) => {
-        const def = getRelicDef(relicId);
-        const cy = startY + idx * (cardH + gap);
+      ctx.fillStyle = INK_SOFT;
+      ctx.font = `800 20px ${FONT_FAMILY2}`;
+      this.drawTruncatedText(ctx, nextBoss.traitShort, previewX + 76, previewY + 50, previewW - 92);
+      const branchBgMap = {
+        blast: "#fff0f0",
+        merge: "#fff8db",
+        collapse: "#e8fbf2"
+      };
+      let cy = y + headerH;
+      for (const spec of cardSpecs) {
+        const { relicId, def, isExpanded, detailLines, detailH, height: cardH } = spec;
         this.buttons.push({
           id: `reward-${relicId}`,
           x: cardX,
@@ -4213,108 +5486,207 @@
         });
         ctx.save();
         ctx.fillStyle = "rgba(78, 52, 46, 0.16)";
-        drawRoundedRect(ctx, cardX, cy + 5, cardW, cardH, 22);
+        drawRoundedRect(ctx, cardX, cy + 5, cardW, cardH, 24);
         ctx.fill();
         ctx.fillStyle = "#ffffff";
-        ctx.strokeStyle = def.badgeColor;
-        ctx.lineWidth = 4;
-        drawRoundedRect(ctx, cardX, cy, cardW, cardH, 22);
+        drawRoundedRect(ctx, cardX, cy, cardW, cardH, 24);
         ctx.fill();
+        ctx.save();
+        drawRoundedRect(ctx, cardX, cy, cardW, cardH, 24);
+        ctx.clip();
+        ctx.fillStyle = def.badgeColor;
+        ctx.fillRect(cardX, cy, 12, cardH);
+        ctx.restore();
+        ctx.strokeStyle = def.badgeColor;
+        ctx.lineWidth = 3.8;
+        drawRoundedRect(ctx, cardX, cy, cardW, cardH, 24);
+        ctx.stroke();
+        const iconCx = cardX + 72;
+        const iconCy = cy + 93;
+        ctx.fillStyle = (_a = branchBgMap[def.branch]) != null ? _a : "#fff4e6";
+        ctx.beginPath();
+        ctx.arc(iconCx, iconCy, 46, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(78, 52, 46, 0.14)";
+        ctx.lineWidth = 2;
         ctx.stroke();
         const icon = this.assets.relics[def.branch];
         if (icon.ready) {
-          ctx.drawImage(icon.el, cardX + 20, cy + 44, 104, 104);
+          ctx.drawImage(icon.el, iconCx - 41, iconCy - 41, 82, 82);
         } else {
           ctx.fillStyle = def.badgeColor;
           ctx.beginPath();
-          ctx.arc(cardX + 72, cy + 96, 44, 0, Math.PI * 2);
+          ctx.arc(iconCx, iconCy, 34, 0, Math.PI * 2);
           ctx.fill();
         }
-        ctx.fillStyle = def.badgeColor;
-        drawRoundedRect(ctx, cardX + 144, cy + 26, 86, 28, 14);
+        const roleX = cardX + 134;
+        const roleY = cy + 24;
+        const roleW = 76;
+        const roleH = 36;
+        ctx.fillStyle = def.roleColor;
+        drawRoundedRect(ctx, roleX, roleY, roleW, roleH, 18);
         ctx.fill();
         ctx.fillStyle = "#ffffff";
-        ctx.font = `900 14px ${FONT_FAMILY2}`;
+        ctx.font = `900 20px ${FONT_FAMILY2}`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(def.branchLabel, cardX + 187, cy + 41);
+        ctx.fillText(def.roleLabel, roleX + roleW / 2, roleY + roleH / 2 + 1);
         ctx.fillStyle = INK2;
-        ctx.font = `900 26px ${FONT_FAMILY2}`;
+        ctx.font = `900 32px ${FONT_FAMILY2}`;
         ctx.textAlign = "left";
-        ctx.textBaseline = "alphabetic";
-        ctx.fillText(def.name, cardX + 242, cy + 49);
+        ctx.textBaseline = "middle";
+        this.drawTruncatedText(ctx, def.name, roleX + roleW + 12, roleY + roleH / 2 + 1, cardW - 300);
+        ctx.fillStyle = INK2;
+        ctx.font = `800 26px ${FONT_FAMILY2}`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        this.drawTruncatedText(ctx, def.shortDesc, roleX, cy + 98, cardW - 154);
+        ctx.fillStyle = "#f5ece0";
+        drawRoundedRect(ctx, roleX, cy + 132, 92, 34, 17);
+        ctx.fill();
         ctx.fillStyle = INK_SOFT;
-        ctx.font = `600 18px ${FONT_FAMILY2}`;
-        const desc = def.detailDesc;
-        const line1 = desc.slice(0, 21);
-        const line2 = desc.slice(21);
-        ctx.fillText(line1, cardX + 144, cy + 98);
-        if (line2) {
-          ctx.fillText(line2, cardX + 144, cy + 128);
+        ctx.font = `800 18px ${FONT_FAMILY2}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(def.branchLabel, roleX + 46, cy + 150);
+        const pickW = 136;
+        const pickH = 38;
+        const pickX = cardX + cardW - pickW - 18;
+        const pickY = cy + 130;
+        ctx.fillStyle = (_b = branchBgMap[def.branch]) != null ? _b : "#fff4e6";
+        ctx.strokeStyle = def.badgeColor;
+        ctx.lineWidth = 2.6;
+        drawRoundedRect(ctx, pickX, pickY, pickW, pickH, 19);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = INK2;
+        ctx.font = `900 21px ${FONT_FAMILY2}`;
+        ctx.fillText("\u9009\u62E9\u795D\u798F", pickX + pickW / 2, pickY + pickH / 2 + 1);
+        if (isExpanded && detailH > 0) {
+          const boxX = cardX + 24;
+          const boxY = cy + baseCardH - 4;
+          const boxW = cardW - 44;
+          const boxH = detailH - 12;
+          ctx.fillStyle = "#fdf4e3";
+          ctx.strokeStyle = "rgba(78, 52, 46, 0.2)";
+          ctx.lineWidth = 2;
+          drawRoundedRect(ctx, boxX, boxY, boxW, boxH, 16);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = INK_SOFT;
+          ctx.font = `700 21px ${FONT_FAMILY2}`;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "middle";
+          detailLines.forEach((line, li) => {
+            ctx.fillText(line, boxX + 16, boxY + 24 + li * 30);
+          });
         }
-        ctx.fillStyle = def.badgeColor;
-        ctx.font = `800 16px ${FONT_FAMILY2}`;
-        ctx.textAlign = "right";
-        ctx.fillText("\u70B9\u51FB\u9009\u62E9\u6B64\u795D\u798F", cardX + cardW - 22, cy + cardH - 20);
+        const infoSize = 46;
+        const infoX = cardX + cardW - infoSize - 16;
+        const infoY = cy + 18;
+        this.buttons.push({
+          id: `reward-info-${relicId}`,
+          x: infoX - 4,
+          y: infoY - 4,
+          w: infoSize + 8,
+          h: infoSize + 8,
+          label: isExpanded ? "\u6536\u8D77\u8BE6\u60C5" : "\u67E5\u770B\u8BE6\u60C5",
+          onClick: () => {
+            this.expandedRewardRelicId = isExpanded ? null : relicId;
+          }
+        });
+        ctx.fillStyle = isExpanded ? "#ffe49e" : "#f7efe3";
+        ctx.strokeStyle = INK2;
+        ctx.lineWidth = 2.8;
+        ctx.beginPath();
+        ctx.arc(infoX + infoSize / 2, infoY + infoSize / 2, infoSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = INK2;
+        ctx.font = `900 ${isExpanded ? 26 : 24}px ${FONT_FAMILY2}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(isExpanded ? "\xD7" : "?", infoX + infoSize / 2, infoY + infoSize / 2 + 1);
         ctx.restore();
-      });
+        cy += cardH + gap;
+      }
+      ctx.restore();
     }
     renderRelicsModal(ctx) {
-      ctx.fillStyle = "rgba(78, 52, 46, 0.48)";
-      ctx.fillRect(0, 0, VIRTUAL_W, VIRTUAL_H);
-      const x = 44;
-      const y = 220;
-      const w = 632;
-      const h = 660;
+      this.drawModalBackdrop(ctx, "rgba(62, 40, 32, 0.36)");
+      const x = 32;
+      const y = 188;
+      const w = 656;
+      const h = 760;
       ctx.fillStyle = "#fffaf0";
       ctx.strokeStyle = INK2;
-      ctx.lineWidth = 4;
-      drawRoundedRect(ctx, x, y, w, h, 24);
+      ctx.lineWidth = 4.5;
+      drawRoundedRect(ctx, x, y, w, h, 28);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = INK2;
-      ctx.font = `900 26px ${FONT_FAMILY2}`;
+      ctx.font = `900 30px ${FONT_FAMILY2}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText(`\u5DF2\u6536\u96C6\u7684\u732B\u732B\u795D\u798F (${this.run.relics.length})`, x + 28, y + 52);
+      ctx.fillText(`\u5DF2\u6536\u96C6\u7684\u795D\u798F (${this.run.relics.length})`, x + 28, y + 58);
       if (this.run.relics.length === 0) {
         ctx.fillStyle = INK_SOFT;
-        ctx.font = `700 20px ${FONT_FAMILY2}`;
+        ctx.font = `700 22px ${FONT_FAMILY2}`;
         ctx.textAlign = "center";
-        ctx.fillText("\u5C1A\u672A\u83B7\u5F97\u795D\u798F\uFF0C\u51FB\u8D25\u5F53\u524D Boss \u540E\u5373\u53EF 3 \u9009 1\uFF01", VIRTUAL_W / 2, y + 290);
+        ctx.fillText("\u5C1A\u672A\u83B7\u5F97\u795D\u798F\uFF0C\u51FB\u8D25 Boss \u540E\u5373\u53EF 3 \u9009 1\uFF01", VIRTUAL_W / 2, y + 340);
       } else {
         let cy = y + 92;
         for (const id of this.run.relics) {
           const def = getRelicDef(id);
+          ctx.save();
+          ctx.font = `600 18px ${FONT_FAMILY2}`;
+          const detailLines = this.wrapTextLines(ctx, def.detailDesc, w - 188);
+          const cardH = Math.max(146, 94 + detailLines.length * 26);
           ctx.fillStyle = "#ffffff";
           ctx.strokeStyle = def.badgeColor;
-          ctx.lineWidth = 3;
-          drawRoundedRect(ctx, x + 24, cy, w - 48, 128, 18);
+          ctx.lineWidth = 3.2;
+          drawRoundedRect(ctx, x + 22, cy, w - 44, cardH, 20);
           ctx.fill();
           ctx.stroke();
           const icon = this.assets.relics[def.branch];
           if (icon.ready) {
-            ctx.drawImage(icon.el, x + 38, cy + 22, 82, 82);
+            ctx.drawImage(icon.el, x + 36, cy + Math.round((cardH - 84) / 2), 84, 84);
           }
+          ctx.fillStyle = def.roleColor;
+          drawRoundedRect(ctx, x + 134, cy + 20, 68, 30, 15);
+          ctx.fill();
+          ctx.fillStyle = "#ffffff";
+          ctx.font = `900 16px ${FONT_FAMILY2}`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(def.roleLabel, x + 168, cy + 36);
           ctx.fillStyle = INK2;
-          ctx.font = `900 22px ${FONT_FAMILY2}`;
+          ctx.font = `900 24px ${FONT_FAMILY2}`;
           ctx.textAlign = "left";
-          ctx.fillText(`[${def.branchLabel}] ${def.name}`, x + 136, cy + 44);
+          ctx.fillText(def.name, x + 212, cy + 36);
           ctx.fillStyle = INK_SOFT;
-          ctx.font = `600 16px ${FONT_FAMILY2}`;
-          ctx.fillText(def.detailDesc.slice(0, 24), x + 136, cy + 78);
-          if (def.detailDesc.length > 24) {
-            ctx.fillText(def.detailDesc.slice(24), x + 136, cy + 104);
-          }
-          cy += 144;
+          ctx.font = `700 16px ${FONT_FAMILY2}`;
+          ctx.textAlign = "right";
+          ctx.fillText(def.branchLabel, x + w - 40, cy + 36);
+          ctx.fillStyle = INK2;
+          ctx.font = `800 19px ${FONT_FAMILY2}`;
+          ctx.textAlign = "left";
+          this.drawTruncatedText(ctx, def.shortDesc, x + 134, cy + 72, w - 180);
+          ctx.fillStyle = INK_SOFT;
+          ctx.font = `600 18px ${FONT_FAMILY2}`;
+          detailLines.forEach((line, idx) => {
+            ctx.fillText(line, x + 134, cy + 104 + idx * 26);
+          });
+          ctx.restore();
+          cy += cardH + 16;
         }
       }
       this.drawStickerButton(ctx, {
         id: "close-relics",
-        x: VIRTUAL_W / 2 - 96,
-        y: y + h - 72,
-        w: 192,
-        h: 48,
+        x: VIRTUAL_W / 2 - 110,
+        y: y + h - 78,
+        w: 220,
+        h: 54,
         label: "\u5173\u95ED",
         accent: true,
         onClick: () => {
@@ -4324,25 +5696,24 @@
     }
     renderRunEndModal(ctx) {
       const isWin = this.run.phase === "victory";
-      ctx.fillStyle = "rgba(78, 52, 46, 0.56)";
-      ctx.fillRect(0, 0, VIRTUAL_W, VIRTUAL_H);
-      const x = 56;
-      const y = 260;
-      const w = 608;
-      const h = 610;
+      this.drawModalBackdrop(ctx, "rgba(62, 40, 32, 0.38)");
+      const x = 44;
+      const y = 236;
+      const w = 632;
+      const h = 668;
       ctx.fillStyle = "#fffaf0";
       ctx.strokeStyle = isWin ? "#d97706" : "#dc2626";
       ctx.lineWidth = 5;
-      drawRoundedRect(ctx, x, y, w, h, 28);
+      drawRoundedRect(ctx, x, y, w, h, 30);
       ctx.fill();
       ctx.stroke();
       const boss = getBossProfile(this.run.stageIndex);
       const avatar = isWin ? this.assets.avatarP1 : this.assets.bosses[boss.id];
       if (avatar.ready) {
-        ctx.drawImage(avatar.el, VIRTUAL_W / 2 - 68, y + 28, 136, 136);
+        ctx.drawImage(avatar.el, VIRTUAL_W / 2 - 70, y + 26, 140, 140);
       }
       ctx.fillStyle = isWin ? "#b45309" : "#b91c1c";
-      ctx.font = `900 32px ${FONT_FAMILY2}`;
+      ctx.font = `900 34px ${FONT_FAMILY2}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "alphabetic";
       this.drawCenteredIconText(
@@ -4350,40 +5721,37 @@
         isWin ? "trophy" : "paw",
         isWin ? "\u732B\u5C4B\u5927\u6377 \xB7 \u5168\u901A\u5173\uFF01" : "\u88AB\u732B\u732B\u6320\u8DB4\u5566",
         VIRTUAL_W / 2,
-        y + 202,
-        40,
-        8
+        y + 206,
+        42,
+        10
       );
       ctx.fillStyle = INK_SOFT;
-      ctx.font = `700 18px ${FONT_FAMILY2}`;
+      ctx.font = `700 21px ${FONT_FAMILY2}`;
       ctx.fillText(
         isWin ? "\u4F60\u51FB\u8D25\u4E86\u5927\u6A58\u3001\u5976\u725B\u732B\u4E0E\u7EC8\u6781\u732B\u738B\u54C8\u57FA\u7C73\uFF01" : `\u6B62\u6B65\u4E8E\u7B2C ${boss.stage} \u5173 \xB7 ${boss.name}`,
         VIRTUAL_W / 2,
-        y + 252
+        y + 258
       );
       ctx.fillStyle = "#f7ebd9";
       ctx.strokeStyle = "rgba(78, 52, 46, 0.25)";
-      ctx.lineWidth = 2;
-      drawRoundedRect(ctx, x + 36, y + 284, w - 72, 186, 18);
+      ctx.lineWidth = 2.4;
+      drawRoundedRect(ctx, x + 32, y + 292, w - 64, 214, 20);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = INK2;
-      ctx.font = `800 19px ${FONT_FAMILY2}`;
+      ctx.font = `800 22px ${FONT_FAMILY2}`;
       ctx.textAlign = "left";
-      ctx.fillText(`\u2022 \u603B\u51FA\u62DB\u56DE\u5408\uFF1A${this.run.totalTurns} \u56DE\u5408`, x + 64, y + 328);
-      ctx.fillText(`\u2022 \u5355\u56DE\u5408\u6700\u9AD8\u7206\u53D1\uFF1A${this.run.bestTurnDamage} \u4F24\u5BB3`, x + 64, y + 368);
-      ctx.fillText(
-        `\u2022 \u6536\u96C6\u795D\u798F\uFF1A${this.run.relics.length > 0 ? this.run.relics.map((id) => getRelicDef(id).name).join(" / ") : "\u65E0"}`,
-        x + 64,
-        y + 408
-      );
-      ctx.fillText(`\u2022 \u5269\u4F59\u751F\u547D\uFF1A${this.run.playerHp} / ${this.run.playerMaxHp}`, x + 64, y + 448);
+      ctx.fillText(`\u2022 \u603B\u51FA\u62DB\u56DE\u5408\uFF1A${this.run.totalTurns} \u56DE\u5408`, x + 56, y + 340);
+      ctx.fillText(`\u2022 \u5355\u56DE\u5408\u6700\u9AD8\u7206\u53D1\uFF1A${this.run.bestTurnDamage} \u4F24\u5BB3`, x + 56, y + 386);
+      const relicNames = this.run.relics.length > 0 ? this.run.relics.map((id) => getRelicDef(id).name).join(" / ") : "\u65E0";
+      this.drawTruncatedText(ctx, `\u2022 \u6536\u96C6\u795D\u798F\uFF1A${relicNames}`, x + 56, y + 432, w - 112);
+      ctx.fillText(`\u2022 \u5269\u4F59\u751F\u547D\uFF1A${this.run.playerHp} / ${this.run.playerMaxHp}`, x + 56, y + 478);
       this.drawStickerButton(ctx, {
         id: "run-again",
-        x: VIRTUAL_W / 2 - 120,
-        y: y + h - 92,
-        w: 240,
-        h: 56,
+        x: VIRTUAL_W / 2 - 130,
+        y: y + h - 98,
+        w: 260,
+        h: 60,
         label: isWin ? "\u518D\u6765\u4E00\u5C40" : "\u91CD\u65B0\u6311\u6218",
         accent: true,
         onClick: () => this.startNewRoguelikeRun(
@@ -4392,53 +5760,94 @@
       });
     }
     renderRulesModal(ctx) {
-      ctx.fillStyle = "rgba(78, 52, 46, 0.45)";
-      ctx.fillRect(0, 0, VIRTUAL_W, VIRTUAL_H);
-      const x = 36;
-      const y = 186;
-      const w = 648;
-      const h = 790;
+      this.drawModalBackdrop(ctx, "rgba(62, 40, 32, 0.36)");
+      const x = 28;
+      const y = 176;
+      const w = 664;
+      const h = 768;
       ctx.fillStyle = "#fffaf0";
       ctx.strokeStyle = INK2;
-      ctx.lineWidth = 4;
-      drawRoundedRect(ctx, x, y, w, h, 24);
+      ctx.lineWidth = 4.5;
+      drawRoundedRect(ctx, x, y, w, h, 30);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = INK2;
-      ctx.font = `900 26px ${FONT_FAMILY2}`;
+      ctx.font = `900 36px ${FONT_FAMILY2}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
-      ctx.fillText("Cat Boom \xB7 \u732B\u6897\u8089\u9E3D\u73A9\u6CD5\u8BF4\u660E", x + 30, y + 52);
-      const lines = [
-        "\u3010\u6838\u5FC3\u5408\u6210\u4E0E\u8FDE\u73AF\u5F15\u7206\u3011",
-        "\u2022 3 \u8FDE / V \u5B57\u5408 1 \u53EA 2 \u7EA7\u5927\u732B\uFF1B\u76F4\u7EBF 4 \u8FDE\u5408 2 \u53EA\u5927\u732B\u3002",
-        "\u2022 \u76F4\u7EBF 5 \u8FDE \u6216 \u4E09\u53EA 2 \u7EA7\u5927\u732B\u4E09\u8FDE \u2192 \u5408 1 \u53EA 3 \u7EA7\u70AB\u5F69\u732B\uFF01",
-        "\u2022 \u5927\u732B\u6DF7\u6D88\uFF1A\u70B8\u5468\u56F4 1 \u5708 + 3 \u683C\u5BBD\u5149\u675F\uFF1B\u70AB\u5F69\u732B 6 \u65B9\u5411\u5168\u7206\uFF01",
-        "\u2022 \u8FDE\u9501\u4E8C\u6B21\u5F15\u7206\uFF1A\u88AB\u6CE2\u53CA\u7684\u5927\u732B/\u70AB\u5F69\u732B\u4F1A\u9010\u6CE2\u8FDE\u73AF\u70B8\u5F00\uFF01",
-        "",
-        "\u3010\u732B\u6897 Boss \u610F\u56FE\u4E0E\u535A\u5F08\u3011",
-        "\u2022 \u7EA2\u865A\u7EBF\u6846\u6807\u51FA Boss \u4E0B\u56DE\u5408\u51C6\u5907\u52A8\u54EA\u4E24\u53EA\u732B\uFF0C\u53EF\u62A2\u5148\u62C6\u62DB\uFF01",
-        "\u2022 \u5927\u6A58\uFF1A\u4E13\u62A2\u6A58\u732B\u5E76\u5E72\u996D\u56DE\u8840 \uFF5C \u5976\u725B\u732B\uFF1A\u6BCF2\u56DE\u5408\u8DD1\u9177\u53D8\u5927\u732B",
-        "\u2022 \u54C8\u57FA\u7C73\uFF1A\u6BCF2\u56DE\u5408\u54C8\u6C14\u53E0 8 \u76FE + \u9020\u5927\u732B\uFF0C\u9AD8\u4F24\u62A2\u7206\uFF01",
-        "\u2022 \u5F00\u5C40\u5148\u9009 1 \u4E2A\u521D\u59CB\u795D\u798F\uFF1B\u51FB\u8D25 Boss \u56DE +25 \u8840\u5E76\u518D 3 \u9009 1\u3002",
-        "",
-        "\u3010\u64CD\u4F5C\u4E0E\u89C6\u89C9\u6307\u793A\u3011",
-        "\u2022 \u62D6\u52A8\u6216\u70B9\u9009\u76F8\u90BB\u732B\u4EA4\u6362\uFF1B\u83B7\u5F97\u300C\u732B\u987B\u96F7\u8FBE\u300D\u540E\u53EF\u5408\u6210\u732B\u4F1A\u6325\u722A\u63D0\u793A\u3002",
-        "\u2022 \u7EFF\u865A\u73AF = \u5408\u6210\u4E2D\u5FC3 \uFF5C \u6A59/\u7C89\u5708 = \u9010\u6CE2\u7206\u53D1 \uFF5C \u9752\u7BAD = \u6536\u7F29\u3002"
+      ctx.fillText("\u600E\u4E48\u73A9 \xB7 30 \u79D2\u770B\u61C2", x + 32, y + 66);
+      const tips = [
+        {
+          tag: "1. \u5408\u5927\u732B",
+          color: "#d97706",
+          desc: "\u62D6\u52A8\u76F8\u90BB\u732B\u51D1 3 \u8FDE\u5408\u6210 2 \u7EA7\u5927\u732B\uFF1B4 \u8FDE\u5408 2 \u53EA\uFF0C5 \u8FDE\u5408\u70AB\u5F69\u732B\uFF01"
+        },
+        {
+          tag: "2. \u723D\u8FDE\u7206",
+          color: "#e54d42",
+          desc: "\u7528\u5927\u732B\u51D1 3 \u8FDE\u4F1A\u70B8\u4E00\u5708 + \u55B7\u5BBD\u5149\u675F\uFF0C\u6CE2\u53CA\u522B\u7684\u5927\u732B\u8FD8\u4F1A\u8FDE\u9501\u7206\uFF01"
+        },
+        {
+          tag: "3. \u9009\u795D\u798F",
+          color: "#2563eb",
+          desc: "\u4E0E Boss \u8F6E\u6D41\u884C\u52A8\uFF0C\u8FC7\u5173\u56DE\u8840\u5E76 3 \u9009 1 \u795D\u798F\uFF1B\u62BD\u5230\u300C\u732B\u987B\u96F7\u8FBE\u300D\u89E3\u9501\u6325\u722A\u63D0\u793A\u3002"
+        }
       ];
-      ctx.fillStyle = INK_SOFT;
-      ctx.font = `600 18px ${FONT_FAMILY2}`;
-      let cy = y + 96;
-      for (const line of lines) {
-        ctx.fillText(line, x + 30, cy);
-        cy += line === "" ? 14 : 38;
+      let cy = y + 116;
+      for (const tip of tips) {
+        ctx.fillStyle = tip.color;
+        ctx.font = `900 26px ${FONT_FAMILY2}`;
+        ctx.fillText(tip.tag, x + 32, cy);
+        cy += 38;
+        ctx.fillStyle = INK2;
+        ctx.font = `700 24px ${FONT_FAMILY2}`;
+        const wrapped = this.wrapTextLines(ctx, tip.desc, w - 68);
+        for (const line of wrapped) {
+          ctx.fillText(line, x + 32, cy);
+          cy += 36;
+        }
+        cy += 22;
       }
+      const btnY = y + h - 86;
+      const btnH = 58;
+      this.drawStickerButton(ctx, {
+        id: "replay-tutorial",
+        x: x + 28,
+        y: btnY,
+        w: 186,
+        h: btnH,
+        label: "\u91CD\u73A9\u6559\u5B66",
+        disabled: this.busy,
+        onClick: () => {
+          this.showRulesModal = false;
+          this.startTutorial();
+        }
+      });
+      const modeLabel = this.gameMode === "roguelike" ? "\u53CC\u4EBA\u6A21\u5F0F" : "\u8089\u9E3D\u95EF\u5173";
+      this.drawStickerButton(ctx, {
+        id: "switch-mode-in-rules",
+        x: x + 234,
+        y: btnY,
+        w: 186,
+        h: btnH,
+        label: modeLabel,
+        disabled: this.busy,
+        onClick: () => {
+          this.showRulesModal = false;
+          const seed = Math.floor(Date.now() % 1e6) + Math.floor(Math.random() * 999);
+          if (this.gameMode === "roguelike") {
+            this.startNewGame(seed);
+          } else {
+            this.startNewRoguelikeRun(seed);
+          }
+        }
+      });
       this.drawStickerButton(ctx, {
         id: "close-rules",
-        x: VIRTUAL_W / 2 - 96,
-        y: y + h - 72,
-        w: 192,
-        h: 48,
+        x: x + 440,
+        y: btnY,
+        w: 196,
+        h: btnH,
         label: "\u77E5\u9053\u4E86",
         accent: true,
         onClick: () => {
@@ -4447,8 +5856,7 @@
       });
     }
     renderDebugPanel(ctx) {
-      ctx.fillStyle = "rgba(78, 52, 46, 0.45)";
-      ctx.fillRect(0, 0, VIRTUAL_W, VIRTUAL_H);
+      this.drawModalBackdrop(ctx, "rgba(62, 40, 32, 0.36)");
       const x = 36;
       const y = 210;
       const w = 648;
@@ -4460,12 +5868,12 @@
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = INK2;
-      ctx.font = `900 25px ${FONT_FAMILY2}`;
+      ctx.font = `900 26px ${FONT_FAMILY2}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       ctx.fillText("\u5B9E\u9A8C\u53F0 \xB7 \u6838\u5FC3\u6D4B\u8BD5\u5C40\u9762\uFF08\u5B8C\u6574 17 \u5C40\u9762\u89C1 lab.html\uFF09", x + 28, y + 50);
       ctx.fillStyle = INK_SOFT;
-      ctx.font = `600 16px ${FONT_FAMILY2}`;
+      ctx.font = `600 18px ${FONT_FAMILY2}`;
       ctx.fillText("\u70B9\u51FB\u4EE5\u4E0B\u6838\u5FC3\u5C40\u9762\u8F7D\u5165\uFF08\u91D1\u8272\u7BAD\u5934\u6307\u793A\u63A8\u8350\u4EA4\u6362\uFF09\uFF1A", x + 28, y + 84);
       const featured = [0, 9, 10, 12, 1, 7, 11, 15];
       const colW = 286;
@@ -4522,7 +5930,7 @@
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = INK2;
-      ctx.font = `700 17px ${FONT_FAMILY2}`;
+      ctx.font = `700 18px ${FONT_FAMILY2}`;
       ctx.fillText(
         `\u79CD\u5B50\uFF1A${this.state.seed}   \xB7   \u56DE\u5408\uFF1A${this.state.turn}   \xB7   \u5408\u6CD5\u4EA4\u6362\uFF1A${this.legalCount}`,
         x + 44,
@@ -4530,7 +5938,7 @@
       );
       if (this.lastSummary) {
         ctx.fillStyle = INK_SOFT;
-        ctx.font = `600 16px ${FONT_FAMILY2}`;
+        ctx.font = `600 17px ${FONT_FAMILY2}`;
         ctx.fillText(
           `\u4E0A\u6B21\u64CD\u4F5C\uFF1A\u9996\u8F6E ${this.lastSummary.directDamage} \u4F24\uFF0C\u603B\u8BA1 ${this.lastSummary.totalDamage} \u4F24\uFF08${this.lastSummary.rounds} \u8F6E\uFF09`,
           x + 44,
@@ -4543,7 +5951,7 @@
         );
       } else {
         ctx.fillStyle = INK_SOFT;
-        ctx.font = `600 16px ${FONT_FAMILY2}`;
+        ctx.font = `600 17px ${FONT_FAMILY2}`;
         ctx.fillText("\u5B8C\u6210\u4E00\u6B21\u4EA4\u6362\u540E\uFF0C\u8FD9\u91CC\u5C06\u663E\u793A\u4F24\u5BB3\u4E0E\u8FDE\u9501\u7EDF\u8BA1\u3002", x + 44, statY + 80);
       }
       this.drawStickerButton(ctx, {

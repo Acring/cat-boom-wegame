@@ -1,5 +1,6 @@
 // Cat Boom · 猫梗 Boss 肉鸽核心逻辑层（纯数据与规则，不依赖 UI/Canvas）
 
+import { loadFixture } from './fixtures';
 import { SeededRng } from './rng';
 import {
   CELL_COUNT,
@@ -7,6 +8,7 @@ import {
   findLegalSwaps,
   GameState,
   HP,
+  index,
   matches,
   newGame,
   previewSwap,
@@ -17,6 +19,7 @@ import {
 
 export type BossId = 'orange' | 'cow' | 'hakimi';
 export type RelicBranch = 'blast' | 'merge' | 'collapse';
+export type RelicRole = 'attack' | 'defense' | 'heal' | 'utility';
 export type RelicId =
   | 'chain_detonator'
   | 'wide_overdrive'
@@ -46,6 +49,9 @@ export interface RelicDef {
   id: RelicId;
   branch: RelicBranch;
   branchLabel: string;
+  role: RelicRole;
+  roleLabel: string;
+  roleColor: string;
   name: string;
   shortDesc: string;
   detailDesc: string;
@@ -87,6 +93,18 @@ export interface HintSet {
   fallback: [number, number] | null;
 }
 
+export type TutorialStepIndex = 0 | 1;
+
+export interface TutorialScenario {
+  step: TutorialStepIndex;
+  totalSteps: number;
+  badge: string;
+  prompt: string;
+  successBanner: string;
+  state: GameState;
+  guideSwap: [number, number];
+}
+
 export interface RoguelikeRun {
   seed: number;
   stageIndex: number; // 0..2
@@ -97,7 +115,7 @@ export interface RoguelikeRun {
   bossTurnsTaken: number;
   relics: RelicId[];
   calmDefuseActive: boolean;
-  phase: 'opening_reward' | 'battle' | 'reward' | 'victory' | 'defeat';
+  phase: 'battle' | 'reward' | 'victory' | 'defeat';
   rewardChoices: RelicId[];
   totalTurns: number;
   bestTurnDamage: number;
@@ -110,36 +128,36 @@ export const BOSSES: readonly BossProfile[] = [
   {
     id: 'orange',
     stage: 1,
-    name: '大橘·干饭王',
-    title: '第 1 关 · 贪吃橘猫',
+    name: '大橘',
+    title: '第 1 关 · 干饭王',
     tagline: '十只橘猫九只胖，见橘就抢！',
-    maxHp: 75,
+    maxHp: 65,
     skillPeriod: 0,
-    traitShort: '专抢橘猫 · 每消1只橘猫回1血(上限+8)',
+    traitShort: '专抢橘猫 · 消橘回血',
     accentColor: '#e67e22',
     barFillColor: '#ffd199',
   },
   {
     id: 'cow',
     stage: 2,
-    name: '奶牛猫·午夜发癫王',
-    title: '第 2 关 · 猫中哈士奇',
+    name: '奶牛猫',
+    title: '第 2 关 · 午夜发癫王',
     tagline: '凌晨三点跑酷，见大猫就炸！',
     maxHp: 95,
     skillPeriod: 2,
-    traitShort: '专炸大猫 · 每2回合跑酷把1只小猫变大猫',
+    traitShort: '专炸大猫 · 每2回合造大猫',
     accentColor: '#3d383b',
     barFillColor: '#cbd5e1',
   },
   {
     id: 'hakimi',
     stage: 3,
-    name: '哈基米·猫王本尊',
+    name: '哈基米',
     title: '第 3 关 · 终极猫王',
     tagline: '优雅压迫感，全场我说了算！',
     maxHp: 120,
     skillPeriod: 2,
-    traitShort: '高伤抢爆 · 每2回合哈气叠8盾+造1大猫',
+    traitShort: '高伤抢爆 · 每2回合叠盾造大猫',
     accentColor: '#c0392b',
     barFillColor: '#f5b7c8',
   },
@@ -151,6 +169,9 @@ export const RELICS: readonly RelicDef[] = [
     id: 'chain_detonator',
     branch: 'blast',
     branchLabel: '爆破流',
+    role: 'attack',
+    roleLabel: '攻击',
+    roleColor: '#e54d42',
     name: '连环雷管',
     shortDesc: '二次引爆每波 +5 伤',
     detailDesc: '触发连锁二次引爆（Wave 1+）时，每多 1 波额外造成 +5 点爆破伤害。',
@@ -160,8 +181,11 @@ export const RELICS: readonly RelicDef[] = [
     id: 'wide_overdrive',
     branch: 'blast',
     branchLabel: '爆破流',
+    role: 'attack',
+    roleLabel: '攻击',
+    roleColor: '#e54d42',
     name: '过载宽光束',
-    shortDesc: '大猫光束射程 +1',
+    shortDesc: '大猫光束射程 +1 格',
     detailDesc: '你的 2 级大猫宽光束射程 +1（最大射程提升至 5 格），轻松引燃全场。',
     badgeColor: '#ff8787',
   },
@@ -169,6 +193,9 @@ export const RELICS: readonly RelicDef[] = [
     id: 'aftershock_paw',
     branch: 'blast',
     branchLabel: '爆破流',
+    role: 'attack',
+    roleLabel: '攻击',
+    roleColor: '#e54d42',
     name: '余震猫爪',
     shortDesc: '每波爆发 +3 穿盾真伤',
     detailDesc: '你触发的每次爆发结束后，追加「爆发波数 × 3」点无视护盾的余震真伤。',
@@ -179,8 +206,11 @@ export const RELICS: readonly RelicDef[] = [
     id: 'paw_shield',
     branch: 'merge',
     branchLabel: '合成流',
+    role: 'defense',
+    roleLabel: '防御',
+    roleColor: '#2b7de9',
     name: '肉垫护盾',
-    shortDesc: '合大猫 +6 盾 · 合炫彩 +15 盾',
+    shortDesc: '合大猫 +6 盾 · 炫彩 +15',
     detailDesc: '每合成 1 只 2 级大猫获得 +6 护盾，合成 3 级炫彩猫获得 +15 护盾。',
     badgeColor: '#f5b82e',
   },
@@ -188,8 +218,11 @@ export const RELICS: readonly RelicDef[] = [
     id: 'double_kibble',
     branch: 'merge',
     branchLabel: '合成流',
+    role: 'attack',
+    roleLabel: '攻击',
+    roleColor: '#e54d42',
     name: '双倍猫粮',
-    shortDesc: '合成基础伤害翻倍',
+    shortDesc: '合成伤害翻倍',
     detailDesc: '你的纯小猫合成与全 2 星合成造成的基础伤害翻倍（3 连 4 伤，三 2 星 12 伤）。',
     badgeColor: '#f59f00',
   },
@@ -197,6 +230,9 @@ export const RELICS: readonly RelicDef[] = [
     id: 'calm_defuse',
     branch: 'merge',
     branchLabel: '合成流',
+    role: 'defense',
+    roleLabel: '防御',
+    roleColor: '#2b7de9',
     name: '以小博大',
     shortDesc: '合成后下回合减伤 30%',
     detailDesc: '本回合只要合成出大猫或炫彩猫，下个 Boss 回合你受到的伤害减免 30%。',
@@ -206,8 +242,11 @@ export const RELICS: readonly RelicDef[] = [
     id: 'whisker_radar',
     branch: 'merge',
     branchLabel: '合成流',
+    role: 'utility',
+    roleLabel: '辅助',
+    roleColor: '#8b5cf6',
     name: '猫须雷达',
-    shortDesc: '可合成/引爆猫咪挥爪提示',
+    shortDesc: '可合成猫咪挥爪提示',
     detailDesc: '感知棋盘动态：可引爆大猫或可合成的猫咪会朝搭档挥爪招手提示交换。',
     badgeColor: '#f59e0b',
   },
@@ -216,8 +255,11 @@ export const RELICS: readonly RelicDef[] = [
     id: 'gravity_vortex',
     branch: 'collapse',
     branchLabel: '收缩流',
+    role: 'attack',
+    roleLabel: '攻击',
+    roleColor: '#e54d42',
     name: '引力漩涡',
-    shortDesc: '收缩每移动 1 猫 +1 伤',
+    shortDesc: '收缩每移 1 猫 +1 伤',
     detailDesc: '纯合成触发定向收缩时，每有 1 只猫发生位移，额外对 Boss 造成 +1 点挤压伤害。',
     badgeColor: '#38b583',
   },
@@ -225,8 +267,11 @@ export const RELICS: readonly RelicDef[] = [
     id: 'catnip_combo',
     branch: 'collapse',
     branchLabel: '收缩流',
+    role: 'attack',
+    roleLabel: '攻击',
+    roleColor: '#e54d42',
     name: '猫薄荷连击',
-    shortDesc: '连锁加伤翻倍 (+4/+8/+12)',
+    shortDesc: '多轮连锁加伤翻倍',
     detailDesc: '你的多轮连锁加伤翻倍，第 2/3/4 轮额外伤害变为 +4 / +8 / +12。',
     badgeColor: '#20c997',
   },
@@ -234,8 +279,11 @@ export const RELICS: readonly RelicDef[] = [
     id: 'combo_heal',
     branch: 'collapse',
     branchLabel: '收缩流',
+    role: 'heal',
+    roleLabel: '回血',
+    roleColor: '#1fa866',
     name: '顺手牵猫',
-    shortDesc: '连锁第 2 轮起每次回 5 血',
+    shortDesc: '触发连锁每轮回 5 血',
     detailDesc: '你通过收缩触发第 2 轮及以上连锁时，每轮回复自身 +5 生命（不超上限）。',
     badgeColor: '#12b886',
   },
@@ -261,24 +309,124 @@ export function createRoguelikeRun(seed: number): RoguelikeRun {
     bossTurnsTaken: 0,
     relics: [],
     calmDefuseActive: false,
-    phase: 'opening_reward',
-    rewardChoices: rollRelicChoices([], seed + 313),
+    phase: 'battle',
+    rewardChoices: [],
     totalTurns: 0,
     bestTurnDamage: 0,
     defeatedBosses: [],
   };
 }
 
-/** 创建指定关卡的对局棋盘状态（玩家永远先手，保留玩家血量与护盾） */
+/** 第 1 关开局预置 2 只 2 级大猫：优先放在开局一步就能引爆的合法交换上，上手一眼就能爽 */
+function seedOpeningBigCats(state: GameState, seed: number): void {
+  const rng = new SeededRng(seed + 4099);
+  const upgraded: number[] = [];
+
+  // 1. 优先找一个合法交换，将其连线里的 1 只猫升为 2 级大猫，确保开局第一手就有机会直接引爆
+  const swaps = findLegalSwaps(state);
+  if (swaps.length > 0) {
+    const startIdx = rng.randiRange(0, swaps.length - 1);
+    for (let offset = 0; offset < swaps.length && upgraded.length < 1; offset++) {
+      const [a, b] = swaps[(startIdx + offset) % swaps.length];
+      const prev = previewSwap(state, a, b);
+      if (!prev.valid || !prev.event || prev.event.lines.length === 0) continue;
+      // 选择不在交换目标格但参与匹配的一只猫（或交换源猫），升级后检查盘面稳定且可引爆
+      const candidates = [a, b, ...prev.event.lines[0].cells];
+      for (const cell of candidates) {
+        const cat = state.board[cell];
+        if (!cat || cat.level !== 1) continue;
+        cat.level = 2;
+        if (matches(state.board).length === 0) {
+          const check = previewSwap(state, a, b);
+          if (check.valid && check.event && check.event.waves.length > 0) {
+            upgraded.push(cell);
+            break;
+          }
+        }
+        cat.level = 1;
+      }
+    }
+  }
+
+  // 2. 在棋盘中部补足到 2 只 2 级大猫（分散摆放，保持无自动匹配）
+  const innerCells: number[] = [];
+  for (let q = 1; q <= 5; q++) {
+    for (let r = 1; r <= 5; r++) {
+      const c = index(q, r);
+      if (c >= 0 && !upgraded.includes(c) && state.board[c]?.level === 1) {
+        innerCells.push(c);
+      }
+    }
+  }
+  for (let i = innerCells.length - 1; i > 0; i--) {
+    const j = rng.randiRange(0, i);
+    const tmp = innerCells[i];
+    innerCells[i] = innerCells[j];
+    innerCells[j] = tmp;
+  }
+  for (const cell of innerCells) {
+    if (upgraded.length >= 2) break;
+    const cat = state.board[cell];
+    if (!cat || cat.level !== 1) continue;
+    cat.level = 2;
+    if (matches(state.board).length === 0 && findLegalSwaps(state).length > 0) {
+      upgraded.push(cell);
+    } else {
+      cat.level = 1;
+    }
+  }
+}
+
+/** 创建指定关卡的对局棋盘状态（玩家永远先手，保留玩家血量与护盾；第 1 关预置 2 只大猫） */
 export function createStageGameState(run: RoguelikeRun): GameState {
   const boss = getBossProfile(run.stageIndex);
   const stageSeed = run.seed + run.stageIndex * 9973 + 17;
   const st = newGame(stageSeed);
+  if (run.stageIndex === 0) {
+    seedOpeningBigCats(st, stageSeed);
+  }
   st.hp = [run.playerHp, boss.maxHp];
   st.maxHp = [run.playerMaxHp, boss.maxHp];
   st.shield = [run.playerShield, run.bossShield];
   st.player = 0;
   return st;
+}
+
+/** 获取 2 步极速必爽新手教学的确定性棋盘场景 */
+export function createTutorialScenario(step: TutorialStepIndex): TutorialScenario {
+  if (step === 0) {
+    const st = loadFixture(0);
+    st.hp = [100, 30];
+    st.maxHp = [100, 30];
+    st.shield = [0, 0];
+    st.player = 0;
+    st.fixture = undefined;
+    return {
+      step: 0,
+      totalSteps: 2,
+      badge: '教学 1/2',
+      prompt: '拖动猫猫，3 连合成大猫！',
+      successBanner: '棒！合出 2 级大猫！',
+      state: st,
+      guideSwap: st.suggested!,
+    };
+  }
+
+  const st = loadFixture(7);
+  st.hp = [100, 30];
+  st.maxHp = [100, 30];
+  st.shield = [0, 0];
+  st.player = 0;
+  st.fixture = undefined;
+  return {
+    step: 1,
+    totalSteps: 2,
+    badge: '教学 2/2',
+    prompt: '用大猫 3 连，连锁轰炸全场！',
+    successBanner: '学会了！正式开打！',
+    state: st,
+    guideSwap: st.suggested!,
+  };
 }
 
 /** 是否持有「猫须雷达」祝福（解锁可合成/引爆猫咪挥爪提示） */
@@ -328,14 +476,14 @@ export function computeBossIntent(
   const skillReady = isBossSkillDue(boss, bossTurnsTaken);
   const skillText =
     boss.id === 'orange'
-      ? '被动：消橘猫回血'
+      ? '消橘回血'
       : boss.id === 'cow'
         ? skillReady
-          ? '本回合跑酷：变 1 只大猫'
-          : '跑酷充能中（下回合发癫）'
+          ? '本回合造大猫'
+          : '下回合造大猫'
         : skillReady
-          ? '本回合哈气：+8 盾 + 造 1 大猫'
-          : '猫王蓄力中（下回合哈气）';
+          ? '本回合+8盾造大猫'
+          : '下回合叠盾造大猫';
 
   if (swaps.length === 0) {
     return {
@@ -416,18 +564,17 @@ export function computeBossIntent(
     chosen = candidates[pick];
   }
 
-  let actionDesc = '准备发起进攻';
+  let actionDesc = '准备进攻';
   if (boss.id === 'orange' && chosen.orangeCount > 0) {
-    const estHeal = Math.min(8, chosen.orangeCount);
     actionDesc = chosen.hasBlast
-      ? `抢爆橘猫大招！(约 ${chosen.damage} 伤 + 回 ${estHeal} 血)`
-      : `抢吃橘猫合大猫 (约 ${chosen.damage} 伤 + 回 ${estHeal} 血)`;
+      ? `大橘想抢爆！预计 ${chosen.damage} 伤`
+      : `大橘盯上橘猫 · 预计 ${chosen.damage} 伤`;
   } else if (chosen.hasBlast) {
-    actionDesc = `锁定抢爆你的大猫！(约 ${chosen.damage} 伤)`;
+    actionDesc = `${boss.name}想抢爆大猫！预计 ${chosen.damage} 伤`;
   } else if (chosen.hasMerge) {
-    actionDesc = `准备合成大猫埋雷 (约 ${chosen.damage} 伤)`;
+    actionDesc = `${boss.name}想合大猫 · 预计 ${chosen.damage} 伤`;
   } else {
-    actionDesc = `预计造成 ${chosen.damage} 伤`;
+    actionDesc = `${boss.name}准备出手 · 预计 ${chosen.damage} 伤`;
   }
 
   return {
@@ -494,11 +641,11 @@ export function applyBossPreTurnSkill(
   const banner =
     boss.id === 'cow'
       ? upgradedCell >= 0
-        ? '奶牛猫午夜跑酷！把 1 只小猫吓成了 2 级大猫！'
-        : '奶牛猫午夜跑酷扑了个空！'
+        ? '奶牛跑酷！造出 1 只大猫'
+        : '奶牛跑酷扑空了！'
       : upgradedCell >= 0
-        ? `哈基米猫王哈气！获得 +${shieldGained} 护盾并催生 1 只大猫！`
-        : `哈基米猫王哈气！获得 +${shieldGained} 护盾！`;
+        ? `哈基米哈气！+${shieldGained} 盾并造大猫`
+        : `哈基米哈气！获得 +${shieldGained} 盾`;
 
   return {
     triggered: true,

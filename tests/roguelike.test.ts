@@ -11,12 +11,13 @@ import {
   computeHintSwaps,
   createRoguelikeRun,
   createStageGameState,
+  createTutorialScenario,
   getBossProfile,
   hasHintRelic,
   RELICS,
   rollRelicChoices,
 } from '../src/roguelike';
-import { cloneState, findLegalSwaps, previewSwap, resolveSwap } from '../src/rules';
+import { cloneState, findLegalSwaps, matches, previewSwap, resolveSwap, validSwap } from '../src/rules';
 
 function runRoguelikeTests() {
   let assertions = 0;
@@ -30,6 +31,12 @@ function runRoguelikeTests() {
   check(RELICS.length === 10, 'Should define 10 mechanism relics across 3 branches');
   const branches = new Set(RELICS.map((r) => r.branch));
   check(branches.size === 3, 'Should cover 3 distinct branches (blast/merge/collapse)');
+  const roles = new Set(RELICS.map((r) => r.role));
+  check(roles.size === 4, 'Should cover 4 distinct roles (attack/defense/heal/utility)');
+  check(
+    RELICS.every((r) => r.roleLabel.length > 0 && r.roleColor.startsWith('#') && r.shortDesc.length > 0),
+    'Every relic must define roleLabel, roleColor and concise shortDesc'
+  );
 
   // 2. 3 选 1 抽卡：初始从三大流派各抽 1 张且不重复
   const choices1 = rollRelicChoices([], 2026);
@@ -184,13 +191,27 @@ function runRoguelikeTests() {
   check(hints.fallback !== null, 'Hint engine must always provide fallback swap when board is playable');
   check(hints.highValue.length <= 2, 'High-value hints must be capped at 2 to prevent visual noise');
 
-  // 8. 端到端模拟一场完整 3 关肉鸽闯关（含开局起手 3 选 1 + 过关 3 选 1 与 Boss 意图/技能交替）
+  // 8. 第 1 关开局预置大猫 & 2 步极速新手教学确定性验证
+  const stage1Board = createStageGameState(createRoguelikeRun(202605));
+  const stage1BigCount = stage1Board.board.filter((c) => c && c.level === 2).length;
+  check(stage1BigCount === 2, 'Stage 1 opening board must seed 2 level-2 big cats for immediate fun');
+  check(matches(stage1Board.board).length === 0, 'Stage 1 seeded board must have no initial auto-matches');
+
+  const tut0 = createTutorialScenario(0);
+  check(tut0.totalSteps === 2, 'Tutorial should have 2 concise steps');
+  check(validSwap(tut0.state, tut0.guideSwap[0], tut0.guideSwap[1]), 'Tutorial step 1 swap must be valid');
+  const tut0Prev = previewSwap(tut0.state, tut0.guideSwap[0], tut0.guideSwap[1]).event!;
+  check(tut0Prev.centers.length >= 1, 'Tutorial step 1 must merge a big cat');
+
+  const tut1 = createTutorialScenario(1);
+  check(validSwap(tut1.state, tut1.guideSwap[0], tut1.guideSwap[1]), 'Tutorial step 2 swap must be valid');
+  const tut1Prev = previewSwap(tut1.state, tut1.guideSwap[0], tut1.guideSwap[1]).event!;
+  check(tut1Prev.waves.length >= 2, 'Tutorial step 2 must trigger chain secondary blast (>=2 waves)');
+
+  // 9. 端到端模拟一场完整 3 关肉鸽闯关（0 弹窗直进第 1 关 + 过关 3 选 1 与 Boss 意图/技能交替）
   const simRun = createRoguelikeRun(202601);
-  check(simRun.phase === 'opening_reward', 'New roguelike run must start in opening_reward phase');
-  check(simRun.rewardChoices.length === 3, 'Opening gift must offer 3 starter relic choices');
-  simRun.relics.push(simRun.rewardChoices[0]);
-  simRun.rewardChoices = [];
-  simRun.phase = 'battle';
+  check(simRun.phase === 'battle', 'New roguelike run must start directly in battle phase');
+  check(simRun.rewardChoices.length === 0, 'New roguelike run should not block opening with reward modal');
   for (let stage = 0; stage < BOSSES.length; stage++) {
     simRun.stageIndex = stage;
     simRun.bossShield = 0;
