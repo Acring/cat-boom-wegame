@@ -7,7 +7,10 @@ import {
   CatData,
   CatLevel,
   CELL_COUNT,
+  clampBoardHeat,
   cloneState,
+  DEFAULT_BOARD_HEAT,
+  findLegalSwaps,
   GameState,
   neighbors,
   newGame,
@@ -99,6 +102,7 @@ class CatBoomLab {
   private paintLevel: 0 | CatLevel = 1;
 
   private speed = 0.5;
+  private boardHeat = DEFAULT_BOARD_HEAT;
   private substepEnabled = true;
   private showOverlay = true;
   private animPreviewMode: CatAnimState = 'idle';
@@ -308,17 +312,52 @@ class CatBoomLab {
       });
     });
 
-    document.getElementById('btn-random-board')!.addEventListener('click', () => {
+    const heatSlider = document.getElementById('range-heat') as HTMLInputElement;
+    const heatLabel = document.getElementById('heat-label')!;
+    const heatPresetBtns = document.querySelectorAll<HTMLButtonElement>('#heat-presets button');
+    const describeHeat = (h: number): string => {
+      if (h < 0.25) return '冷静策略';
+      if (h < 0.45) return '前期克制';
+      if (h <= 0.55) return '均衡标准';
+      if (h < 0.8) return '进阶升温';
+      return '高能爽爆';
+    };
+    const setBoardHeat = (value: number) => {
+      this.boardHeat = clampBoardHeat(value);
+      heatSlider.value = this.boardHeat.toFixed(2);
+      heatLabel.textContent = `${this.boardHeat.toFixed(2)} · ${describeHeat(this.boardHeat)}`;
+      heatPresetBtns.forEach((b) => {
+        const target = Number(b.dataset.heat || 0.5);
+        b.classList.toggle('active', Math.abs(target - this.boardHeat) < 0.01);
+      });
+    };
+    heatSlider.addEventListener('input', () => {
+      setBoardHeat(Number(heatSlider.value));
+    });
+    heatPresetBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        setBoardHeat(Number(btn.dataset.heat || 0.5));
+      });
+    });
+    setBoardHeat(DEFAULT_BOARD_HEAT);
+
+    const generateRandomBoard = () => {
       if (this.busy) return;
-      this.state = newGame(Math.floor(Date.now() % 100000));
+      this.state = newGame(Math.floor(Date.now() % 100000), this.boardHeat);
       this.snapshotBeforeSwap = cloneState(this.state);
       this.lastSwap = null;
       this.clearPlaybackState();
       this.syncVisuals(this.state.board);
       this.updateButtons();
-      this.setStatus('已生成随机棋盘，可自由摆棋或直接交换测试');
-      this.logEl.textContent = '随机棋盘已就绪。';
-    });
+      const legalCount = findLegalSwaps(this.state).length;
+      this.setStatus(
+        `已按热度 ${this.boardHeat.toFixed(2)} 生成随机盘（当前可走 ${legalCount} 步）`
+      );
+      this.logEl.textContent = `随机棋盘已就绪：热度 ${this.boardHeat.toFixed(2)}（${describeHeat(this.boardHeat)}），开局合法交换 ${legalCount} 步。`;
+    };
+
+    document.getElementById('btn-heat-random')!.addEventListener('click', generateRandomBoard);
+    document.getElementById('btn-random-board')!.addEventListener('click', generateRandomBoard);
   }
 
   private bindCanvas(): void {
@@ -577,7 +616,7 @@ class CatBoomLab {
     this.updateButtons();
     this.logEl.textContent = '';
 
-    const result = resolveSwap(this.state, a, b);
+    const result = resolveSwap(this.state, a, b, { boardHeat: this.boardHeat });
     this.setStatus('交换棋子...');
     await this.animateBoardPositions(result.swapped, 0.22);
 

@@ -4,6 +4,7 @@ import { loadFixture } from './fixtures';
 import { SeededRng } from './rng';
 import {
   CELL_COUNT,
+  clampBoardHeat,
   cloneState,
   findLegalSwaps,
   GameState,
@@ -123,6 +124,26 @@ export interface RoguelikeRun {
 }
 
 export const STAGE_CLEAR_HEAL = 25;
+
+export interface StageHeatCurve {
+  base: number;
+  stepPerTurn: number;
+  max: number;
+}
+
+/** 肉鸽三关棋盘热度曲线：前期克制重策略，随关卡与回合递进逐步升温爽爆 */
+export const STAGE_HEAT_CURVES: readonly StageHeatCurve[] = [
+  { base: 0.12, stepPerTurn: 0.045, max: 0.85 }, // 第 1 关 大橘：冷静起步，中残局起势
+  { base: 0.32, stepPerTurn: 0.055, max: 0.92 }, // 第 2 关 奶牛猫：中温起手，快步升温
+  { base: 0.52, stepPerTurn: 0.06, max: 1.0 },   // 第 3 关 哈基米：中高热起手，后期拉满爽爆
+];
+
+export function computeRoguelikeBoardHeat(stageIndex: number, turn: number): number {
+  const clampedStage = Math.max(0, Math.min(STAGE_HEAT_CURVES.length - 1, stageIndex));
+  const curve = STAGE_HEAT_CURVES[clampedStage];
+  const safeTurn = Math.max(1, Math.floor(turn));
+  return clampBoardHeat(Math.min(curve.max, curve.base + (safeTurn - 1) * curve.stepPerTurn));
+}
 
 export const BOSSES: readonly BossProfile[] = [
   {
@@ -381,7 +402,8 @@ function seedOpeningBigCats(state: GameState, seed: number): void {
 export function createStageGameState(run: RoguelikeRun): GameState {
   const boss = getBossProfile(run.stageIndex);
   const stageSeed = run.seed + run.stageIndex * 9973 + 17;
-  const st = newGame(stageSeed);
+  const openingHeat = computeRoguelikeBoardHeat(run.stageIndex, 1);
+  const st = newGame(stageSeed, openingHeat);
   if (run.stageIndex === 0) {
     seedOpeningBigCats(st, stageSeed);
   }
@@ -435,9 +457,12 @@ export function hasHintRelic(relics: readonly RelicId[]): boolean {
 }
 
 /** 汇总玩家已拥有祝福对应的规则修饰器 */
-export function buildPlayerModifiers(relics: readonly RelicId[]): RuleModifiers {
+export function buildPlayerModifiers(
+  relics: readonly RelicId[],
+  boardHeat?: number
+): RuleModifiers {
   const has = (id: RelicId) => relics.includes(id);
-  return {
+  const modifiers: RuleModifiers = {
     beamRadiusBonus: has('wide_overdrive') ? 1 : 0,
     mergeDamageMultiplier: has('double_kibble') ? 2 : 1,
     waveChainBonus: has('chain_detonator') ? 5 : 0,
@@ -446,13 +471,21 @@ export function buildPlayerModifiers(relics: readonly RelicId[]): RuleModifiers 
     aftershockPerWave: has('aftershock_paw') ? 3 : 0,
     damageMultiplier: 1,
   };
+  if (boardHeat !== undefined) {
+    modifiers.boardHeat = clampBoardHeat(boardHeat);
+  }
+  return modifiers;
 }
 
 /** Boss 回合的规则修饰器（含玩家的“以小博大”30% 减伤） */
-export function buildBossModifiers(run: RoguelikeRun): RuleModifiers {
-  return {
+export function buildBossModifiers(run: RoguelikeRun, boardHeat?: number): RuleModifiers {
+  const modifiers: RuleModifiers = {
     damageMultiplier: run.calmDefuseActive ? 0.7 : 1,
   };
+  if (boardHeat !== undefined) {
+    modifiers.boardHeat = clampBoardHeat(boardHeat);
+  }
+  return modifiers;
 }
 
 function isBossSkillDue(boss: BossProfile, bossTurnsTaken: number): boolean {

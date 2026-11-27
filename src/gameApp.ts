@@ -12,6 +12,7 @@ import {
   buildPlayerModifiers,
   computeBossIntent,
   computeHintSwaps,
+  computeRoguelikeBoardHeat,
   createRoguelikeRun,
   createStageGameState,
   createTutorialScenario,
@@ -32,6 +33,7 @@ import {
   CatLevel,
   CELL_COUNT,
   cloneState,
+  computePvpBoardHeat,
   findLegalSwaps,
   GameState,
   HP,
@@ -513,8 +515,14 @@ export class CatBoomApp {
   }
 
   private getCurrentModifiers(forPlayer: 0 | 1): RuleModifiers | undefined {
-    if (this.tutorial || this.gameMode !== 'roguelike') return undefined;
-    return forPlayer === 0 ? buildPlayerModifiers(this.run.relics) : buildBossModifiers(this.run);
+    if (this.tutorial) return undefined;
+    if (this.gameMode !== 'roguelike') {
+      return { boardHeat: computePvpBoardHeat(this.state.turn) };
+    }
+    const boardHeat = computeRoguelikeBoardHeat(this.run.stageIndex, this.state.turn);
+    return forPlayer === 0
+      ? buildPlayerModifiers(this.run.relics, boardHeat)
+      : buildBossModifiers(this.run, boardHeat);
   }
 
   private startTutorial(): void {
@@ -607,7 +615,7 @@ export class CatBoomApp {
     this.gameMode = 'pvp';
     this.bossHighlightSwap = null;
     this.showRelicsModal = false;
-    this.loadState(newGame(seed));
+    this.loadState(newGame(seed, computePvpBoardHeat(1)));
     this.refreshPlayerTurnGuides();
   }
 

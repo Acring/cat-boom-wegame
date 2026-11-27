@@ -351,6 +351,7 @@
   var COMBO_STEP = 2;
   var MAX_COMBO_BONUS = 6;
   var WAVE_CHAIN_BONUS = 0;
+  var DEFAULT_BOARD_HEAT = 0.5;
   function cloneCat(cat) {
     return cat ? { id: cat.id, color: cat.color, level: cat.level } : null;
   }
@@ -494,21 +495,85 @@
     state.nextId += 1;
     return cat;
   }
-  function generate(state, rng) {
-    for (let attempt = 0; attempt < 500; attempt++) {
-      state.board = new Array(CELL_COUNT).fill(null);
-      for (let i = 0; i < CELL_COUNT; i++) {
-        const colors = Array.from({ length: COLORS }, (_, k) => k);
-        while (colors.length > 0) {
-          const pick = rng.randiRange(0, colors.length - 1);
-          state.board[i] = { id: 0, color: colors[pick], level: 1 };
-          colors.splice(pick, 1);
-          if (matches(state.board).length === 0) {
-            break;
-          }
+  function clampBoardHeat(heat) {
+    if (heat === void 0 || !Number.isFinite(heat)) {
+      return DEFAULT_BOARD_HEAT;
+    }
+    return Math.max(0, Math.min(1, heat));
+  }
+  function colorAffinityScore(board, cell, color) {
+    const [cq, cr] = coord(cell);
+    let score = 0;
+    for (const [aq, ar] of AXES) {
+      for (const dir of [-1, 1]) {
+        const n1 = index(cq + aq * dir, cr + ar * dir);
+        if (n1 >= 0 && matchesColor(board[n1], color)) {
+          score += 1.4;
+          if (board[n1].level >= 2) score += 1.6;
+        }
+        const n2 = index(cq + aq * dir * 2, cr + ar * dir * 2);
+        if (n2 >= 0 && matchesColor(board[n2], color)) {
+          score += 0.6;
+          if (board[n2].level >= 2) score += 1;
         }
       }
-      if (matches(state.board).length === 0 && findLegalSwaps(state).length > 0) {
+    }
+    return score;
+  }
+  function pickWeightedColor(board, cell, candidates, boardHeat, rng) {
+    if (candidates.length <= 1) {
+      return candidates[0];
+    }
+    const heat = clampBoardHeat(boardHeat);
+    if (Math.abs(heat - DEFAULT_BOARD_HEAT) < 1e-6) {
+      return candidates[rng.randiRange(0, candidates.length - 1)];
+    }
+    const bias = (heat - 0.5) * 2;
+    let total = 0;
+    const weights = [];
+    for (const color of candidates) {
+      const score = colorAffinityScore(board, cell, color);
+      const w = Math.max(0.02, Math.exp(bias * score * 0.9));
+      weights.push(w);
+      total += w;
+    }
+    let r = rng.nextFloat() * total;
+    for (let i = 0; i < candidates.length; i++) {
+      r -= weights[i];
+      if (r <= 0) {
+        return candidates[i];
+      }
+    }
+    return candidates[candidates.length - 1];
+  }
+  function generate(state, rng, boardHeat = DEFAULT_BOARD_HEAT) {
+    const heat = clampBoardHeat(boardHeat);
+    const useDefaultUniform = Math.abs(heat - DEFAULT_BOARD_HEAT) < 1e-6;
+    for (let attempt = 0; attempt < 500; attempt++) {
+      state.board = new Array(CELL_COUNT).fill(null);
+      let filled = true;
+      for (let i = 0; i < CELL_COUNT; i++) {
+        if (useDefaultUniform) {
+          const colors = Array.from({ length: COLORS }, (_, k) => k);
+          while (colors.length > 0) {
+            const pick = rng.randiRange(0, colors.length - 1);
+            state.board[i] = { id: 0, color: colors[pick], level: 1 };
+            colors.splice(pick, 1);
+            if (matches(state.board).length === 0) {
+              break;
+            }
+          }
+        } else {
+          const candidates = refillColors(state.board, i);
+          if (candidates.length === 0) {
+            filled = false;
+            break;
+          }
+          const picked = pickWeightedColor(state.board, i, candidates, heat, rng);
+          state.board[i] = { id: 0, color: picked, level: 1 };
+        }
+      }
+      if (filled && matches(state.board).length === 0 && findLegalSwaps(state).length > 0) {
         for (let i = 0; i < CELL_COUNT; i++) {
           state.board[i] = newCat(state, state.board[i].color, 1);
         }
@@ -517,7 +582,7 @@
     }
     throw new Error("Could not generate a playable board");
   }
-  function newGame(seedValue) {
+  function newGame(seedValue, boardHeat = DEFAULT_BOARD_HEAT) {
     const rng = new SeededRng(seedValue);
     const state = {
       seed: seedValue,
@@ -530,7 +595,7 @@
       winner: -1,
       ruleVersion: 3
     };
-    generate(state, rng);
+    generate(state, rng, boardHeat);
     state.rngState = rng.getState();
     return state;
   }
@@ -972,13 +1037,14 @@
     }
     return colors;
   }
-  function refill(state, rng, event) {
+  function refill(state, rng, event, boardHeat = DEFAULT_BOARD_HEAT) {
+    const heat = clampBoardHeat(boardHeat);
     const edgeSet = new Set(event.edgeHoles);
     for (let cell = 0; cell < state.board.length; cell++) {
       if (state.board[cell] === null) {
         const colors = refillColors(state.board, cell);
         if (colors.length === 0) continue;
-        const picked = colors[rng.randiRange(0, colors.length - 1)];
+        const picked = pickWeightedColor(state.board, cell, colors, heat, rng);
         const cat = newCat(state, picked, 1);
         state.board[cell] = cat;
         event.spawn.push({
@@ -1001,7 +1067,7 @@
     copy.board[b] = tmp;
     return { valid: true, event: roundStep(copy, 1, modifiers) };
   }
-  function reshuffle(state, rng) {
+  function reshuffle(state, rng, boardHeat = DEFAULT_BOARD_HEAT) {
     for (let attempt = 0; attempt < 128; attempt++) {
       for (let i = state.board.length - 1; i > 0; i--) {
         const j = rng.randiRange(0, i);
@@ -1013,7 +1079,7 @@
         return "\u65E0\u53EF\u7528\u4EA4\u6362\uFF0C\u68CB\u76D8\u5DF2\u91CD\u6392\uFF08\u4FDD\u7559\u732B\u7684\u7B49\u7EA7\u4E0E\u989C\u8272\uFF09";
       }
     }
-    generate(state, rng);
+    generate(state, rng, boardHeat);
     return "\u91CD\u6392\u672A\u627E\u5230\u53EF\u7528\u5E03\u5C40\uFF0C\u5DF2\u5237\u65B0\u4E3A\u5C0F\u732B\u68CB\u76D8";
   }
   function resolveSwap(state, a, b, modifiers) {
@@ -1028,6 +1094,7 @@
     }
     const next = cloneState(state);
     const rng = new SeededRng(next.seed, next.rngState);
+    const boardHeat = clampBoardHeat(modifiers == null ? void 0 : modifiers.boardHeat);
     const tmp = next.board[a];
     next.board[a] = next.board[b];
     next.board[b] = tmp;
@@ -1043,17 +1110,17 @@
         event.refillMatches = [];
         break;
       }
-      refill(next, rng, event);
+      refill(next, rng, event, boardHeat);
     }
     if (next.winner < 0) {
       if (matches(next.board).length > 0) {
-        generate(next, rng);
+        generate(next, rng, boardHeat);
         notice = "\u8FBE\u5230 100 \u8F6E\u7ED3\u7B97\u4FDD\u62A4\uFF0C\u5DF2\u5237\u65B0\u68CB\u76D8";
       }
       next.player = next.player === 0 ? 1 : 0;
       next.turn += 1;
       if (findLegalSwaps(next).length === 0) {
-        notice = reshuffle(next, rng);
+        notice = reshuffle(next, rng, boardHeat);
       }
     }
     next.rngState = rng.getState();
@@ -1324,6 +1391,7 @@
       this.paintColor = 0;
       this.paintLevel = 1;
       this.speed = 0.5;
+      this.boardHeat = DEFAULT_BOARD_HEAT;
       this.substepEnabled = true;
       this.showOverlay = true;
       this.animPreviewMode = "idle";
@@ -1508,17 +1576,50 @@
           levelBtns.forEach((b) => b.classList.toggle("active", b === btn));
         });
       });
-      document.getElementById("btn-random-board").addEventListener("click", () => {
+      const heatSlider = document.getElementById("range-heat");
+      const heatLabel = document.getElementById("heat-label");
+      const heatPresetBtns = document.querySelectorAll("#heat-presets button");
+      const describeHeat = (h) => {
+        if (h < 0.25) return "\u51B7\u9759\u7B56\u7565";
+        if (h < 0.45) return "\u524D\u671F\u514B\u5236";
+        if (h <= 0.55) return "\u5747\u8861\u6807\u51C6";
+        if (h < 0.8) return "\u8FDB\u9636\u5347\u6E29";
+        return "\u9AD8\u80FD\u723D\u7206";
+      };
+      const setBoardHeat = (value) => {
+        this.boardHeat = clampBoardHeat(value);
+        heatSlider.value = this.boardHeat.toFixed(2);
+        heatLabel.textContent = `${this.boardHeat.toFixed(2)} \xB7 ${describeHeat(this.boardHeat)}`;
+        heatPresetBtns.forEach((b) => {
+          const target = Number(b.dataset.heat || 0.5);
+          b.classList.toggle("active", Math.abs(target - this.boardHeat) < 0.01);
+        });
+      };
+      heatSlider.addEventListener("input", () => {
+        setBoardHeat(Number(heatSlider.value));
+      });
+      heatPresetBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setBoardHeat(Number(btn.dataset.heat || 0.5));
+        });
+      });
+      setBoardHeat(DEFAULT_BOARD_HEAT);
+      const generateRandomBoard = () => {
         if (this.busy) return;
-        this.state = newGame(Math.floor(Date.now() % 1e5));
+        this.state = newGame(Math.floor(Date.now() % 1e5), this.boardHeat);
         this.snapshotBeforeSwap = cloneState(this.state);
         this.lastSwap = null;
         this.clearPlaybackState();
         this.syncVisuals(this.state.board);
         this.updateButtons();
-        this.setStatus("\u5DF2\u751F\u6210\u968F\u673A\u68CB\u76D8\uFF0C\u53EF\u81EA\u7531\u6446\u68CB\u6216\u76F4\u63A5\u4EA4\u6362\u6D4B\u8BD5");
-        this.logEl.textContent = "\u968F\u673A\u68CB\u76D8\u5DF2\u5C31\u7EEA\u3002";
-      });
+        const legalCount = findLegalSwaps(this.state).length;
+        this.setStatus(
+          `\u5DF2\u6309\u70ED\u5EA6 ${this.boardHeat.toFixed(2)} \u751F\u6210\u968F\u673A\u76D8\uFF08\u5F53\u524D\u53EF\u8D70 ${legalCount} \u6B65\uFF09`
+        );
+        this.logEl.textContent = `\u968F\u673A\u68CB\u76D8\u5DF2\u5C31\u7EEA\uFF1A\u70ED\u5EA6 ${this.boardHeat.toFixed(2)}\uFF08${describeHeat(this.boardHeat)}\uFF09\uFF0C\u5F00\u5C40\u5408\u6CD5\u4EA4\u6362 ${legalCount} \u6B65\u3002`;
+      };
+      document.getElementById("btn-heat-random").addEventListener("click", generateRandomBoard);
+      document.getElementById("btn-random-board").addEventListener("click", generateRandomBoard);
     }
     bindCanvas() {
       const getPos = (ev) => {
@@ -1747,7 +1848,7 @@
       this.preview = { valid: false };
       this.updateButtons();
       this.logEl.textContent = "";
-      const result = resolveSwap(this.state, a, b);
+      const result = resolveSwap(this.state, a, b, { boardHeat: this.boardHeat });
       this.setStatus("\u4EA4\u6362\u68CB\u5B50...");
       await this.animateBoardPositions(result.swapped, 0.22);
       let totalDmg = 0;

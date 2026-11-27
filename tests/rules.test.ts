@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import {
   castWideBeam,
   CELL_COUNT,
+  clampBoardHeat,
   cloneState,
   COLORS,
+  computePvpBoardHeat,
   coord,
   findLegalSwaps,
   index,
@@ -172,6 +174,45 @@ function runTests() {
       turns += 1;
     }
     check(st.winner === 0 || st.winner === 1, `Match ${matchIdx} must reach a winner within 200 turns`);
+  }
+
+  // 8. 棋盘热度（boardHeat）确定性与可控单调性验证
+  check(clampBoardHeat(-0.5) === 0 && clampBoardHeat(1.8) === 1, 'clampBoardHeat must clamp into [0, 1]');
+  check(
+    computePvpBoardHeat(1) < computePvpBoardHeat(6) && computePvpBoardHeat(6) < computePvpBoardHeat(14),
+    'PvP board heat should smoothly rise with turn count'
+  );
+  const coldA = newGame(7777, 0.1);
+  const coldB = newGame(7777, 0.1);
+  check(JSON.stringify(coldA) === JSON.stringify(coldB), 'Same seed and heat must produce identical board');
+  let coldSwapSum = 0;
+  let midSwapSum = 0;
+  let hotSwapSum = 0;
+  for (let s = 3000; s < 3030; s++) {
+    const gCold = newGame(s, 0.05);
+    const gMid = newGame(s, 0.5);
+    const gHot = newGame(s, 0.95);
+    check(matches(gCold.board).length === 0 && matches(gHot.board).length === 0, 'Heat boards must have no auto-matches');
+    coldSwapSum += findLegalSwaps(gCold).length;
+    midSwapSum += findLegalSwaps(gMid).length;
+    hotSwapSum += findLegalSwaps(gHot).length;
+  }
+  check(
+    coldSwapSum < midSwapSum && midSwapSum < hotSwapSum,
+    `Board heat must monotonically increase legal swaps (cold=${coldSwapSum}, mid=${midSwapSum}, hot=${hotSwapSum})`
+  );
+
+  // 高热补猫依然严守“不直接制造新 3 连”的硬约束
+  for (let seed = 4100; seed < 4108; seed++) {
+    const st = newGame(seed, 0.95);
+    const [a, b] = findLegalSwaps(st)[0];
+    const res = resolveSwap(st, a, b, { boardHeat: 0.95 });
+    for (const ev of res.events) {
+      const detKeys = new Set(ev.deterministicMatches.map((l) => l.cells.join(',')));
+      for (const line of ev.refillMatches) {
+        check(detKeys.has(line.cells.join(',')), 'High-heat refill must never create new immediate 3+ matches');
+      }
+    }
   }
 
   console.log(`ALL RULES TESTS PASSED (${assertions} assertions)`);

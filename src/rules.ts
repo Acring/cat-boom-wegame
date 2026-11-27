@@ -26,6 +26,7 @@ export const MAX_RADIUS = 4;
 export const COMBO_STEP = 2;
 export const MAX_COMBO_BONUS = 6;
 export const WAVE_CHAIN_BONUS = 0; // 二次引爆每波额外加伤（默认 0，可在实验室体验后调整）
+export const DEFAULT_BOARD_HEAT = 0.5; // 棋盘热度默认值（0.5=均匀随机，0=冷静策略，1=高频连锁爽局）
 
 export type CatLevel = 1 | 2 | 3;
 
@@ -84,6 +85,7 @@ export interface RuleModifiers {
   collapseMoveDamage?: number;
   aftershockPerWave?: number;
   damageMultiplier?: number;
+  boardHeat?: number;
 }
 
 export interface RoundEvent {
@@ -296,21 +298,103 @@ function newCat(state: GameState, color: number, level: CatLevel = 1): CatData {
   return cat;
 }
 
-function generate(state: GameState, rng: SeededRng): void {
-  for (let attempt = 0; attempt < 500; attempt++) {
-    state.board = new Array<CatData | null>(CELL_COUNT).fill(null);
-    for (let i = 0; i < CELL_COUNT; i++) {
-      const colors = Array.from({ length: COLORS }, (_, k) => k);
-      while (colors.length > 0) {
-        const pick = rng.randiRange(0, colors.length - 1);
-        state.board[i] = { id: 0, color: colors[pick], level: 1 };
-        colors.splice(pick, 1);
-        if (matches(state.board).length === 0) {
-          break;
-        }
+export function clampBoardHeat(heat?: number): number {
+  if (heat === undefined || !Number.isFinite(heat)) {
+    return DEFAULT_BOARD_HEAT;
+  }
+  return Math.max(0, Math.min(1, heat));
+}
+
+/** 双人 PvP 节奏升温：前期偏冷静策略，随回合递增逐步进入高频连锁爽局 */
+export function computePvpBoardHeat(turn: number): number {
+  const safeTurn = Math.max(1, Math.floor(turn));
+  return clampBoardHeat(Math.min(0.92, 0.18 + (safeTurn - 1) * 0.045));
+}
+
+/** 计算候选色在 cell 处的局部亲和分（同色邻接 / 隔格准三连 / 贴近大猫） */
+function colorAffinityScore(board: Board, cell: number, color: number): number {
+  const [cq, cr] = coord(cell);
+  let score = 0;
+  for (const [aq, ar] of AXES) {
+    for (const dir of [-1, 1] as const) {
+      const n1 = index(cq + aq * dir, cr + ar * dir);
+      if (n1 >= 0 && matchesColor(board[n1], color)) {
+        score += 1.4;
+        if (board[n1]!.level >= 2) score += 1.6;
+      }
+      const n2 = index(cq + aq * dir * 2, cr + ar * dir * 2);
+      if (n2 >= 0 && matchesColor(board[n2], color)) {
+        score += 0.6;
+        if (board[n2]!.level >= 2) score += 1.0;
       }
     }
-    if (matches(state.board).length === 0 && findLegalSwaps(state).length > 0) {
+  }
+  return score;
+}
+
+/** 按棋盘热度从合法候选色中加权抽取颜色（heat=0.5 严格退化为均匀随机，保持旧种子兼容） */
+function pickWeightedColor(
+  board: Board,
+  cell: number,
+  candidates: number[],
+  boardHeat: number,
+  rng: SeededRng
+): number {
+  if (candidates.length <= 1) {
+    return candidates[0];
+  }
+  const heat = clampBoardHeat(boardHeat);
+  if (Math.abs(heat - DEFAULT_BOARD_HEAT) < 1e-6) {
+    return candidates[rng.randiRange(0, candidates.length - 1)];
+  }
+  const bias = (heat - 0.5) * 2; // [-1, 1]
+  let total = 0;
+  const weights: number[] = [];
+  for (const color of candidates) {
+    const score = colorAffinityScore(board, cell, color);
+    const w = Math.max(0.02, Math.exp(bias * score * 0.9));
+    weights.push(w);
+    total += w;
+  }
+  let r = rng.nextFloat() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    r -= weights[i];
+    if (r <= 0) {
+      return candidates[i];
+    }
+  }
+  return candidates[candidates.length - 1];
+}
+
+function generate(state: GameState, rng: SeededRng, boardHeat = DEFAULT_BOARD_HEAT): void {
+  const heat = clampBoardHeat(boardHeat);
+  const useDefaultUniform = Math.abs(heat - DEFAULT_BOARD_HEAT) < 1e-6;
+
+  for (let attempt = 0; attempt < 500; attempt++) {
+    state.board = new Array<CatData | null>(CELL_COUNT).fill(null);
+    let filled = true;
+    for (let i = 0; i < CELL_COUNT; i++) {
+      if (useDefaultUniform) {
+        const colors = Array.from({ length: COLORS }, (_, k) => k);
+        while (colors.length > 0) {
+          const pick = rng.randiRange(0, colors.length - 1);
+          state.board[i] = { id: 0, color: colors[pick], level: 1 };
+          colors.splice(pick, 1);
+          if (matches(state.board).length === 0) {
+            break;
+          }
+        }
+      } else {
+        const candidates = refillColors(state.board, i);
+        if (candidates.length === 0) {
+          filled = false;
+          break;
+        }
+        const picked = pickWeightedColor(state.board, i, candidates, heat, rng);
+        state.board[i] = { id: 0, color: picked, level: 1 };
+      }
+    }
+    if (filled && matches(state.board).length === 0 && findLegalSwaps(state).length > 0) {
       for (let i = 0; i < CELL_COUNT; i++) {
         state.board[i] = newCat(state, state.board[i]!.color, 1);
       }
@@ -320,7 +404,7 @@ function generate(state: GameState, rng: SeededRng): void {
   throw new Error('Could not generate a playable board');
 }
 
-export function newGame(seedValue: number): GameState {
+export function newGame(seedValue: number, boardHeat = DEFAULT_BOARD_HEAT): GameState {
   const rng = new SeededRng(seedValue);
   const state: GameState = {
     seed: seedValue,
@@ -333,7 +417,7 @@ export function newGame(seedValue: number): GameState {
     winner: -1,
     ruleVersion: 3,
   };
-  generate(state, rng);
+  generate(state, rng, boardHeat);
   state.rngState = rng.getState();
   return state;
 }
@@ -834,13 +918,19 @@ export function refillColors(board: Board, cell: number): number[] {
   return colors;
 }
 
-export function refill(state: GameState, rng: SeededRng, event: RoundEvent): void {
+export function refill(
+  state: GameState,
+  rng: SeededRng,
+  event: RoundEvent,
+  boardHeat = DEFAULT_BOARD_HEAT
+): void {
+  const heat = clampBoardHeat(boardHeat);
   const edgeSet = new Set(event.edgeHoles);
   for (let cell = 0; cell < state.board.length; cell++) {
     if (state.board[cell] === null) {
       const colors = refillColors(state.board, cell);
       if (colors.length === 0) continue;
-      const picked = colors[rng.randiRange(0, colors.length - 1)];
+      const picked = pickWeightedColor(state.board, cell, colors, heat, rng);
       const cat = newCat(state, picked, 1);
       state.board[cell] = cat;
       event.spawn.push({
@@ -870,7 +960,7 @@ export function previewSwap(
   return { valid: true, event: roundStep(copy, 1, modifiers) };
 }
 
-function reshuffle(state: GameState, rng: SeededRng): string {
+function reshuffle(state: GameState, rng: SeededRng, boardHeat = DEFAULT_BOARD_HEAT): string {
   for (let attempt = 0; attempt < 128; attempt++) {
     for (let i = state.board.length - 1; i > 0; i--) {
       const j = rng.randiRange(0, i);
@@ -882,7 +972,7 @@ function reshuffle(state: GameState, rng: SeededRng): string {
       return '无可用交换，棋盘已重排（保留猫的等级与颜色）';
     }
   }
-  generate(state, rng);
+  generate(state, rng, boardHeat);
   return '重排未找到可用布局，已刷新为小猫棋盘';
 }
 
@@ -904,6 +994,7 @@ export function resolveSwap(
 
   const next = cloneState(state);
   const rng = new SeededRng(next.seed, next.rngState);
+  const boardHeat = clampBoardHeat(modifiers?.boardHeat);
   const tmp = next.board[a];
   next.board[a] = next.board[b];
   next.board[b] = tmp;
@@ -921,18 +1012,18 @@ export function resolveSwap(
       event.refillMatches = [];
       break;
     }
-    refill(next, rng, event);
+    refill(next, rng, event, boardHeat);
   }
 
   if (next.winner < 0) {
     if (matches(next.board).length > 0) {
-      generate(next, rng);
+      generate(next, rng, boardHeat);
       notice = '达到 100 轮结算保护，已刷新棋盘';
     }
     next.player = next.player === 0 ? 1 : 0;
     next.turn += 1;
     if (findLegalSwaps(next).length === 0) {
-      notice = reshuffle(next, rng);
+      notice = reshuffle(next, rng, boardHeat);
     }
   }
 

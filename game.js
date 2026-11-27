@@ -667,6 +667,7 @@
   var COMBO_STEP = 2;
   var MAX_COMBO_BONUS = 6;
   var WAVE_CHAIN_BONUS = 0;
+  var DEFAULT_BOARD_HEAT = 0.5;
   function cloneCat(cat) {
     return cat ? { id: cat.id, color: cat.color, level: cat.level } : null;
   }
@@ -810,21 +811,89 @@
     state.nextId += 1;
     return cat;
   }
-  function generate(state, rng) {
-    for (let attempt = 0; attempt < 500; attempt++) {
-      state.board = new Array(CELL_COUNT).fill(null);
-      for (let i = 0; i < CELL_COUNT; i++) {
-        const colors = Array.from({ length: COLORS }, (_, k) => k);
-        while (colors.length > 0) {
-          const pick = rng.randiRange(0, colors.length - 1);
-          state.board[i] = { id: 0, color: colors[pick], level: 1 };
-          colors.splice(pick, 1);
-          if (matches(state.board).length === 0) {
-            break;
-          }
+  function clampBoardHeat(heat) {
+    if (heat === void 0 || !Number.isFinite(heat)) {
+      return DEFAULT_BOARD_HEAT;
+    }
+    return Math.max(0, Math.min(1, heat));
+  }
+  function computePvpBoardHeat(turn) {
+    const safeTurn = Math.max(1, Math.floor(turn));
+    return clampBoardHeat(Math.min(0.92, 0.18 + (safeTurn - 1) * 0.045));
+  }
+  function colorAffinityScore(board, cell, color) {
+    const [cq, cr] = coord(cell);
+    let score = 0;
+    for (const [aq, ar] of AXES) {
+      for (const dir of [-1, 1]) {
+        const n1 = index(cq + aq * dir, cr + ar * dir);
+        if (n1 >= 0 && matchesColor(board[n1], color)) {
+          score += 1.4;
+          if (board[n1].level >= 2) score += 1.6;
+        }
+        const n2 = index(cq + aq * dir * 2, cr + ar * dir * 2);
+        if (n2 >= 0 && matchesColor(board[n2], color)) {
+          score += 0.6;
+          if (board[n2].level >= 2) score += 1;
         }
       }
-      if (matches(state.board).length === 0 && findLegalSwaps(state).length > 0) {
+    }
+    return score;
+  }
+  function pickWeightedColor(board, cell, candidates, boardHeat, rng) {
+    if (candidates.length <= 1) {
+      return candidates[0];
+    }
+    const heat = clampBoardHeat(boardHeat);
+    if (Math.abs(heat - DEFAULT_BOARD_HEAT) < 1e-6) {
+      return candidates[rng.randiRange(0, candidates.length - 1)];
+    }
+    const bias = (heat - 0.5) * 2;
+    let total = 0;
+    const weights = [];
+    for (const color of candidates) {
+      const score = colorAffinityScore(board, cell, color);
+      const w = Math.max(0.02, Math.exp(bias * score * 0.9));
+      weights.push(w);
+      total += w;
+    }
+    let r = rng.nextFloat() * total;
+    for (let i = 0; i < candidates.length; i++) {
+      r -= weights[i];
+      if (r <= 0) {
+        return candidates[i];
+      }
+    }
+    return candidates[candidates.length - 1];
+  }
+  function generate(state, rng, boardHeat = DEFAULT_BOARD_HEAT) {
+    const heat = clampBoardHeat(boardHeat);
+    const useDefaultUniform = Math.abs(heat - DEFAULT_BOARD_HEAT) < 1e-6;
+    for (let attempt = 0; attempt < 500; attempt++) {
+      state.board = new Array(CELL_COUNT).fill(null);
+      let filled = true;
+      for (let i = 0; i < CELL_COUNT; i++) {
+        if (useDefaultUniform) {
+          const colors = Array.from({ length: COLORS }, (_, k) => k);
+          while (colors.length > 0) {
+            const pick = rng.randiRange(0, colors.length - 1);
+            state.board[i] = { id: 0, color: colors[pick], level: 1 };
+            colors.splice(pick, 1);
+            if (matches(state.board).length === 0) {
+              break;
+            }
+          }
+        } else {
+          const candidates = refillColors(state.board, i);
+          if (candidates.length === 0) {
+            filled = false;
+            break;
+          }
+          const picked = pickWeightedColor(state.board, i, candidates, heat, rng);
+          state.board[i] = { id: 0, color: picked, level: 1 };
+        }
+      }
+      if (filled && matches(state.board).length === 0 && findLegalSwaps(state).length > 0) {
         for (let i = 0; i < CELL_COUNT; i++) {
           state.board[i] = newCat(state, state.board[i].color, 1);
         }
@@ -833,7 +902,7 @@
     }
     throw new Error("Could not generate a playable board");
   }
-  function newGame(seedValue) {
+  function newGame(seedValue, boardHeat = DEFAULT_BOARD_HEAT) {
     const rng = new SeededRng(seedValue);
     const state = {
       seed: seedValue,
@@ -846,7 +915,7 @@
       winner: -1,
       ruleVersion: 3
     };
-    generate(state, rng);
+    generate(state, rng, boardHeat);
     state.rngState = rng.getState();
     return state;
   }
@@ -1288,13 +1357,14 @@
     }
     return colors;
   }
-  function refill(state, rng, event) {
+  function refill(state, rng, event, boardHeat = DEFAULT_BOARD_HEAT) {
+    const heat = clampBoardHeat(boardHeat);
     const edgeSet = new Set(event.edgeHoles);
     for (let cell = 0; cell < state.board.length; cell++) {
       if (state.board[cell] === null) {
         const colors = refillColors(state.board, cell);
         if (colors.length === 0) continue;
-        const picked = colors[rng.randiRange(0, colors.length - 1)];
+        const picked = pickWeightedColor(state.board, cell, colors, heat, rng);
         const cat = newCat(state, picked, 1);
         state.board[cell] = cat;
         event.spawn.push({
@@ -1317,7 +1387,7 @@
     copy.board[b] = tmp;
     return { valid: true, event: roundStep(copy, 1, modifiers) };
   }
-  function reshuffle(state, rng) {
+  function reshuffle(state, rng, boardHeat = DEFAULT_BOARD_HEAT) {
     for (let attempt = 0; attempt < 128; attempt++) {
       for (let i = state.board.length - 1; i > 0; i--) {
         const j = rng.randiRange(0, i);
@@ -1329,7 +1399,7 @@
         return "\u65E0\u53EF\u7528\u4EA4\u6362\uFF0C\u68CB\u76D8\u5DF2\u91CD\u6392\uFF08\u4FDD\u7559\u732B\u7684\u7B49\u7EA7\u4E0E\u989C\u8272\uFF09";
       }
     }
-    generate(state, rng);
+    generate(state, rng, boardHeat);
     return "\u91CD\u6392\u672A\u627E\u5230\u53EF\u7528\u5E03\u5C40\uFF0C\u5DF2\u5237\u65B0\u4E3A\u5C0F\u732B\u68CB\u76D8";
   }
   function resolveSwap(state, a, b, modifiers) {
@@ -1344,6 +1414,7 @@
     }
     const next = cloneState(state);
     const rng = new SeededRng(next.seed, next.rngState);
+    const boardHeat = clampBoardHeat(modifiers == null ? void 0 : modifiers.boardHeat);
     const tmp = next.board[a];
     next.board[a] = next.board[b];
     next.board[b] = tmp;
@@ -1359,17 +1430,17 @@
         event.refillMatches = [];
         break;
       }
-      refill(next, rng, event);
+      refill(next, rng, event, boardHeat);
     }
     if (next.winner < 0) {
       if (matches(next.board).length > 0) {
-        generate(next, rng);
+        generate(next, rng, boardHeat);
         notice = "\u8FBE\u5230 100 \u8F6E\u7ED3\u7B97\u4FDD\u62A4\uFF0C\u5DF2\u5237\u65B0\u68CB\u76D8";
       }
       next.player = next.player === 0 ? 1 : 0;
       next.turn += 1;
       if (findLegalSwaps(next).length === 0) {
-        notice = reshuffle(next, rng);
+        notice = reshuffle(next, rng, boardHeat);
       }
     }
     next.rngState = rng.getState();
@@ -1610,6 +1681,20 @@
 
   // src/roguelike.ts
   var STAGE_CLEAR_HEAL = 25;
+  var STAGE_HEAT_CURVES = [
+    { base: 0.12, stepPerTurn: 0.045, max: 0.85 },
+    // 第 1 关 大橘：冷静起步，中残局起势
+    { base: 0.32, stepPerTurn: 0.055, max: 0.92 },
+    // 第 2 关 奶牛猫：中温起手，快步升温
+    { base: 0.52, stepPerTurn: 0.06, max: 1 }
+    // 第 3 关 哈基米：中高热起手，后期拉满爽爆
+  ];
+  function computeRoguelikeBoardHeat(stageIndex, turn) {
+    const clampedStage = Math.max(0, Math.min(STAGE_HEAT_CURVES.length - 1, stageIndex));
+    const curve = STAGE_HEAT_CURVES[clampedStage];
+    const safeTurn = Math.max(1, Math.floor(turn));
+    return clampBoardHeat(Math.min(curve.max, curve.base + (safeTurn - 1) * curve.stepPerTurn));
+  }
   var BOSSES = [
     {
       id: "orange",
@@ -1856,7 +1941,8 @@
   function createStageGameState(run) {
     const boss = getBossProfile(run.stageIndex);
     const stageSeed = run.seed + run.stageIndex * 9973 + 17;
-    const st = newGame(stageSeed);
+    const openingHeat = computeRoguelikeBoardHeat(run.stageIndex, 1);
+    const st = newGame(stageSeed, openingHeat);
     if (run.stageIndex === 0) {
       seedOpeningBigCats(st, stageSeed);
     }
@@ -1903,9 +1989,9 @@
   function hasHintRelic(relics) {
     return relics.includes("whisker_radar");
   }
-  function buildPlayerModifiers(relics) {
+  function buildPlayerModifiers(relics, boardHeat) {
     const has = (id) => relics.includes(id);
-    return {
+    const modifiers = {
       beamRadiusBonus: has("wide_overdrive") ? 1 : 0,
       mergeDamageMultiplier: has("double_kibble") ? 2 : 1,
       waveChainBonus: has("chain_detonator") ? 5 : 0,
@@ -1914,11 +2000,19 @@
       aftershockPerWave: has("aftershock_paw") ? 3 : 0,
       damageMultiplier: 1
     };
+    if (boardHeat !== void 0) {
+      modifiers.boardHeat = clampBoardHeat(boardHeat);
+    }
+    return modifiers;
   }
-  function buildBossModifiers(run) {
-    return {
+  function buildBossModifiers(run, boardHeat) {
+    const modifiers = {
       damageMultiplier: run.calmDefuseActive ? 0.7 : 1
     };
+    if (boardHeat !== void 0) {
+      modifiers.boardHeat = clampBoardHeat(boardHeat);
+    }
+    return modifiers;
   }
   function isBossSkillDue(boss, bossTurnsTaken) {
     if (boss.skillPeriod <= 0) return false;
@@ -2445,8 +2539,12 @@
       return this.state.winner >= 0;
     }
     getCurrentModifiers(forPlayer) {
-      if (this.tutorial || this.gameMode !== "roguelike") return void 0;
-      return forPlayer === 0 ? buildPlayerModifiers(this.run.relics) : buildBossModifiers(this.run);
+      if (this.tutorial) return void 0;
+      if (this.gameMode !== "roguelike") {
+        return { boardHeat: computePvpBoardHeat(this.state.turn) };
+      }
+      const boardHeat = computeRoguelikeBoardHeat(this.run.stageIndex, this.state.turn);
+      return forPlayer === 0 ? buildPlayerModifiers(this.run.relics, boardHeat) : buildBossModifiers(this.run, boardHeat);
     }
     startTutorial() {
       if (this.busy) return;
@@ -2529,7 +2627,7 @@
       this.gameMode = "pvp";
       this.bossHighlightSwap = null;
       this.showRelicsModal = false;
-      this.loadState(newGame(seed));
+      this.loadState(newGame(seed, computePvpBoardHeat(1)));
       this.refreshPlayerTurnGuides();
     }
     loadState(next) {

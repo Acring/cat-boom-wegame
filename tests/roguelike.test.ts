@@ -9,6 +9,7 @@ import {
   buildPlayerModifiers,
   computeBossIntent,
   computeHintSwaps,
+  computeRoguelikeBoardHeat,
   createRoguelikeRun,
   createStageGameState,
   createTutorialScenario,
@@ -208,6 +209,21 @@ function runRoguelikeTests() {
   const tut1Prev = previewSwap(tut1.state, tut1.guideSwap[0], tut1.guideSwap[1]).event!;
   check(tut1Prev.waves.length >= 2, 'Tutorial step 2 must trigger chain secondary blast (>=2 waves)');
 
+  // 8.5 肉鸽双维度棋盘热度升温曲线校验（关卡递增 + 局内回合递增）
+  const s1t1 = computeRoguelikeBoardHeat(0, 1);
+  const s1t8 = computeRoguelikeBoardHeat(0, 8);
+  const s2t1 = computeRoguelikeBoardHeat(1, 1);
+  const s3t1 = computeRoguelikeBoardHeat(2, 1);
+  const s3t12 = computeRoguelikeBoardHeat(2, 12);
+  check(s1t1 < s2t1 && s2t1 < s3t1, 'Opening board heat must increase across stages 1 -> 2 -> 3');
+  check(s1t1 < s1t8 && s3t1 < s3t12, 'Board heat must rise as turns progress within a stage');
+  check(s1t1 <= 0.2 && s3t12 >= 0.95, 'Stage 1 opening should stay calm while Stage 3 late-game heats up');
+  check(
+    buildPlayerModifiers([], s1t1).boardHeat === s1t1 &&
+      buildBossModifiers(createRoguelikeRun(1), s3t12).boardHeat === s3t12,
+    'Player and boss modifiers must pass through boardHeat when provided'
+  );
+
   // 9. 端到端模拟一场完整 3 关肉鸽闯关（0 弹窗直进第 1 关 + 过关 3 选 1 与 Boss 意图/技能交替）
   const simRun = createRoguelikeRun(202601);
   check(simRun.phase === 'battle', 'New roguelike run must start directly in battle phase');
@@ -228,7 +244,8 @@ function runRoguelikeTests() {
         check(swaps.length > 0, `Stage ${stage} player must have legal swaps`);
         let best = swaps[0];
         let bestDmg = -1;
-        const pMods = buildPlayerModifiers(simRun.relics);
+        const stageHeat = computeRoguelikeBoardHeat(stage, st.turn);
+        const pMods = buildPlayerModifiers(simRun.relics, stageHeat);
         for (const sw of swaps) {
           const p = previewSwap(st, sw[0], sw[1], pMods);
           if (p.valid && p.event && p.event.damage > bestDmg) {
@@ -245,7 +262,8 @@ function runRoguelikeTests() {
         applyBossPreTurnSkill(st, boss, simRun.bossTurnsTaken);
         const intent = computeBossIntent(st, boss, simRun.bossTurnsTaken, simRun.calmDefuseActive ? 0.7 : 1);
         if (!intent.swap) break;
-        const res = resolveSwap(st, intent.swap[0], intent.swap[1], buildBossModifiers(simRun));
+        const stageHeat = computeRoguelikeBoardHeat(stage, st.turn);
+        const res = resolveSwap(st, intent.swap[0], intent.swap[1], buildBossModifiers(simRun, stageHeat));
         check(res.valid, `Stage ${stage} boss swap must resolve`);
         applyBossPostTurnPassive(res.state, boss, res.events);
         simRun.calmDefuseActive = false;
