@@ -305,10 +305,11 @@ export function clampBoardHeat(heat?: number): number {
   return Math.max(0, Math.min(1, heat));
 }
 
-/** 双人 PvP 节奏升温：前期偏冷静策略，随回合递增逐步进入高频连锁爽局 */
-export function computePvpBoardHeat(turn: number): number {
-  const safeTurn = Math.max(1, Math.floor(turn));
-  return clampBoardHeat(Math.min(0.92, 0.18 + (safeTurn - 1) * 0.045));
+export const PVP_BOARD_HEAT = 0.18;
+
+/** 双人 PvP 棋盘热度：保持开局固定冷静热度（无局内升温） */
+export function computePvpBoardHeat(_turn = 1): number {
+  return PVP_BOARD_HEAT;
 }
 
 /** 计算候选色在 cell 处的局部亲和分（同色邻接 / 隔格准三连 / 贴近大猫） */

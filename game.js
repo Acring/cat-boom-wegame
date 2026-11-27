@@ -817,9 +817,9 @@
     }
     return Math.max(0, Math.min(1, heat));
   }
-  function computePvpBoardHeat(turn) {
-    const safeTurn = Math.max(1, Math.floor(turn));
-    return clampBoardHeat(Math.min(0.92, 0.18 + (safeTurn - 1) * 0.045));
+  var PVP_BOARD_HEAT = 0.18;
+  function computePvpBoardHeat(_turn = 1) {
+    return PVP_BOARD_HEAT;
   }
   function colorAffinityScore(board, cell, color) {
     const [cq, cr] = coord(cell);
@@ -1681,19 +1681,17 @@
 
   // src/roguelike.ts
   var STAGE_CLEAR_HEAL = 25;
-  var STAGE_HEAT_CURVES = [
-    { base: 0.12, stepPerTurn: 0.045, max: 0.85 },
-    // 第 1 关 大橘：冷静起步，中残局起势
-    { base: 0.32, stepPerTurn: 0.055, max: 0.92 },
-    // 第 2 关 奶牛猫：中温起手，快步升温
-    { base: 0.52, stepPerTurn: 0.06, max: 1 }
-    // 第 3 关 哈基米：中高热起手，后期拉满爽爆
+  var STAGE_BOARD_HEATS = [
+    0.12,
+    // 第 1 关 大橘：冷静起步
+    0.32,
+    // 第 2 关 奶牛猫：中温节奏
+    0.52
+    // 第 3 关 哈基米：中高热博弈
   ];
-  function computeRoguelikeBoardHeat(stageIndex, turn) {
-    const clampedStage = Math.max(0, Math.min(STAGE_HEAT_CURVES.length - 1, stageIndex));
-    const curve = STAGE_HEAT_CURVES[clampedStage];
-    const safeTurn = Math.max(1, Math.floor(turn));
-    return clampBoardHeat(Math.min(curve.max, curve.base + (safeTurn - 1) * curve.stepPerTurn));
+  function computeRoguelikeBoardHeat(stageIndex, _turn = 1) {
+    const clampedStage = Math.max(0, Math.min(STAGE_BOARD_HEATS.length - 1, stageIndex));
+    return clampBoardHeat(STAGE_BOARD_HEATS[clampedStage]);
   }
   var BOSSES = [
     {

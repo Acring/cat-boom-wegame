@@ -179,8 +179,8 @@ function runTests() {
   // 8. 棋盘热度（boardHeat）确定性与可控单调性验证
   check(clampBoardHeat(-0.5) === 0 && clampBoardHeat(1.8) === 1, 'clampBoardHeat must clamp into [0, 1]');
   check(
-    computePvpBoardHeat(1) < computePvpBoardHeat(6) && computePvpBoardHeat(6) < computePvpBoardHeat(14),
-    'PvP board heat should smoothly rise with turn count'
+    computePvpBoardHeat(1) === computePvpBoardHeat(6) && computePvpBoardHeat(6) === computePvpBoardHeat(14),
+    'PvP board heat should stay constant at opening heat without in-match ramp'
   );
   const coldA = newGame(7777, 0.1);
   const coldB = newGame(7777, 0.1);
